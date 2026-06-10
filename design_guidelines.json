@@ -1,0 +1,86 @@
+{
+  "theme": "Dark",
+  "archetype": "Archetype 7: Electric & Neon",
+  "domain_context": "Sports prediction app for MMGH community. Futuristic, high-stakes aesthetic.",
+  "typography": {
+    "heading_font": "Unbounded",
+    "body_font": "Outfit",
+    "rules": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tighter",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "body": "text-base leading-relaxed",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em]"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#0A0A0C",
+      "secondary": "#121216"
+    },
+    "surface": {
+      "glass": "bg-white/5 backdrop-blur-xl border border-white/10",
+      "solid": "bg-[#18181C]"
+    },
+    "accents": {
+      "cyan": "#00F0FF",
+      "pink": "#FF007F",
+      "live_green": "#39FF14",
+      "locked_red": "#FF2A2A"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA"
+    }
+  },
+  "spacing_and_layout": {
+    "padding": "Generous spacing. p-4 to p-6 inside match cards to avoid text collision.",
+    "grid": "Control Room Grid for predictions. Tight gaps (gap-4). Matches span 1 column on mobile, 2 or 3 on desktop.",
+    "responsive": "Mobile-first stack. Elements must easily fit narrow screens (iPhone SE etc).",
+    "alignment": "Optical alignment for team flags and input scores to ensure exact center symmetry on match cards."
+  },
+  "components": {
+    "match_cards": "Glassmorphism (Crystal variant). 1px inner border (border-white/10). On hover, subtle lift with cyan border glow. Include space for Home Flag, Home Score, Away Score, Away Flag, Kickoff, Venue, Group/Round, and Live Countdown badge.",
+    "inputs_score": "Square or rounded-md. Inset background (bg-black/50), border-white/10. Focus: ring-2 ring-[#00F0FF]. Text centered, large, bold.",
+    "filters_chips": "Pill-shaped (rounded-full). Unselected: bg-white/5 border-white/10. Selected: bg-[#00F0FF] text-black font-bold shadow-[0_0_15px_rgba(0,240,255,0.5)].",
+    "buttons_primary": "Solid cyan or pink background, high contrast dark text, glow on hover. No generic pill shapes without sharp styling.",
+    "auto_lock_indicator": "When match is locked (kickoff passed), reduce card opacity to 50%, change inputs to disabled/read-only, show red padlock icon."
+  },
+  "interactions_and_motion": {
+    "hover": "Shift border colors or add subtle cyan/pink glow.",
+    "transitions": "Use specific transition properties (e.g., transition-colors duration-200), not transition-all.",
+    "live_indicators": "Pulsing animation (animate-pulse) on the live/countdown badges."
+  },
+  "icons": "lucide-react",
+  "testing": "All interactive elements MUST include data-testid attribute in kebab-case (e.g., data-testid='predict-match-button').",
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.pexels.com/photos/35898730/pexels-photo-35898730.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "hero_background",
+        "description": "Aerial view of a night football match. Use with heavy dark overlay (bg-black/70) for the landing screen background."
+      },
+      {
+        "url": "https://images.pexels.com/photos/6532364/pexels-photo-6532364.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "prizes_trophy",
+        "description": "Shiny golden star trophies reflecting on a glass surface. Use for the Prize Info section (1st $250, 2nd $100, 3rd $50)."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1580397282348-9ab3f9d41a2f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxuZW9uJTIwc29jY2VyJTIwYmFsbHxlbnwwfHx8fDE3ODEwNTg4Nzl8MA&ixlib=rb-4.1.0&q=85",
+        "category": "watermark_texture",
+        "description": "Black and white ball illustration. Can be used as a subtle background watermark for empty states."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build the application using .js files only (React/Next.js as applicable). Do NOT use TypeScript.",
+    "Ensure the contest is branded 'MMGH FIFA World Cup 2026 Prediction Contest'.",
+    "Sponsorship by 'FrameX LGS' must be clearly displayed in the prize section.",
+    "The admin panel should be password protected and show full leaderboards.",
+    "Regular users should ONLY see a public stats page (participant count) and NOT the leaderboard, to keep rankings anonymous.",
+    "Implement the scoring system: +1 correct winner, +3 exact score, +4 perfect (winner+score).",
+    "For 48 country flags, try to use a reliable flag icon library (like flag-icons) or high-quality emoji strings for performance.",
+    "Make sure locked matches (past kickoff) are read-only and distinctly styled.",
+    "Ensure 'data-testid' is present on every interactable element."
+  ]
+}
