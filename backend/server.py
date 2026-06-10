@@ -89,26 +89,18 @@ def is_locked(match: Dict[str, Any]) -> bool:
 
 def calc_points(pred_h: Optional[int], pred_a: Optional[int],
                 act_h: Optional[int], act_a: Optional[int]) -> Optional[int]:
-    """Scoring: +4 perfect (winner+exact score), +3 exact draw score, +1 correct winner.
-    Per requirements: exact score = 3pts, perfect = 4pts (winner + score).
-    A perfect win prediction = 1 (winner) + 3 (score) = 4.
-    A perfect draw prediction = exact score (3pts). No winner pts for draw.
+    """Scoring:
+      +4 — winner + exact score (exact score prediction)
+      +1 — correct outcome (winner or draw) but wrong score
+       0 — wrong outcome
     """
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
     if pred_h == act_h and pred_a == act_a:
-        # Exact score
-        # If non-draw, also correct winner → 4
-        if act_h != act_a:
-            return 4
-        return 3  # exact draw
-    # Otherwise check winner
+        return 4
     a_winner = "h" if act_h > act_a else ("a" if act_a > act_h else "d")
     p_winner = "h" if pred_h > pred_a else ("a" if pred_a > pred_h else "d")
-    if a_winner == p_winner and a_winner != "d":
-        return 1
-    if a_winner == p_winner and a_winner == "d":
-        # correct draw outcome but wrong score
+    if a_winner == p_winner:
         return 1
     return 0
 
@@ -315,7 +307,7 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
             if pts is None:
                 continue
             total += pts
-            if pts >= 3:
+            if pts == 4:
                 perfect += 1
             elif pts == 1:
                 correct += 1

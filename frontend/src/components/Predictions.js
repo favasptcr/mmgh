@@ -83,7 +83,7 @@ export default function Predictions({ session }) {
 
   // My current score (only for matches with results)
   const myScore = useMemo(() => {
-    let total = 0, perfect = 0, exact = 0, winner = 0;
+    let total = 0, perfect = 0, winner = 0;
     for (const m of matches) {
       if (m.home_score == null) continue;
       const p = preds[m.match_id];
@@ -91,15 +91,14 @@ export default function Predictions({ session }) {
       const ph = Number(p.home_score), pa = Number(p.away_score);
       if (Number.isNaN(ph) || Number.isNaN(pa)) continue;
       if (ph === m.home_score && pa === m.away_score) {
-        if (m.home_score !== m.away_score) { total += 4; perfect++; }
-        else { total += 3; exact++; }
+        total += 4; perfect++;
       } else {
         const aw = m.home_score > m.away_score ? "h" : m.away_score > m.home_score ? "a" : "d";
         const pw = ph > pa ? "h" : pa > ph ? "a" : "d";
         if (aw === pw) { total += 1; winner++; }
       }
     }
-    return { total, perfect, exact, winner };
+    return { total, perfect, winner };
   }, [matches, preds]);
 
   return (
@@ -121,7 +120,6 @@ export default function Predictions({ session }) {
         </div>
         <div style={{ display: "flex", gap: 14, fontSize: 11, color: "#A1A1AA", flexWrap: "wrap" }}>
           <Stat color="#FFD24A" v={myScore.perfect} l="PERFECT (+4)" />
-          <Stat color="#00F0FF" v={myScore.exact} l="EXACT DRAW (+3)" />
           <Stat color="#39FF14" v={myScore.winner} l="WINNER (+1)" />
         </div>
       </div>

@@ -86,12 +86,11 @@ export default function Landing({ onEntered, stats }) {
             marginBottom: 12, textAlign: "center",
           }}>SCORING SYSTEM</div>
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 12, fontSize: 13,
           }}>
-            <ScoreLine color="#39FF14" label="Correct winner" pts="+1" />
-            <ScoreLine color="#00F0FF" label="Exact score" pts="+3" />
-            <ScoreLine color="#FFD24A" label="Perfect (winner + score)" pts="+4" />
+            <ScoreLine color="#39FF14" label="Correct winner only" pts="+1" />
+            <ScoreLine color="#FFD24A" label="Winner + exact score" pts="+4" />
           </div>
         </div>
 

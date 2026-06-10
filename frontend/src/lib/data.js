@@ -42,9 +42,10 @@ export const ROUND_LABEL = {
 };
 
 // Local scoring helper (matches backend)
+// +4 exact score (winner + goals); +1 correct outcome only; 0 wrong
 export function calcPoints(predH, predA, actH, actA) {
   if (actH == null || actA == null || predH == null || predA == null) return null;
-  if (predH === actH && predA === actA) return actH !== actA ? 4 : 3;
+  if (predH === actH && predA === actA) return 4;
   const aw = actH > actA ? "h" : actA > actH ? "a" : "d";
   const pw = predH > predA ? "h" : predA > predH ? "a" : "d";
   if (aw === pw) return 1;

@@ -1,4 +1,4 @@
-import { Lock, MapPin, Clock, CheckCircle2, Target, Trophy } from "lucide-react";
+import { Lock, MapPin, Clock, CheckCircle2, Trophy } from "lucide-react";
 import { useCountdown } from "@/lib/useCountdown";
 import { getFlag, GROUP_COLORS, ROUND_LABEL, calcPoints } from "@/lib/data";
 
@@ -142,13 +142,12 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
               <span style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
                 padding: "3px 8px", borderRadius: 999,
-                background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 3 ? "rgba(0,240,255,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
-                border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 3 ? "#00F0FF" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
-                color: pts === 4 ? "#FFD24A" : pts === 3 ? "#00F0FF" : pts === 1 ? "#39FF14" : "#FF2A2A",
+                background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
+                border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
+                color: pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A",
                 fontFamily: "Unbounded", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
               }} data-testid={`match-points-${match.match_id}`}>
                 {pts === 4 ? <><Trophy size={10}/> +4 PERFECT</>
-                 : pts === 3 ? <><Target size={10}/> +3 EXACT</>
                  : pts === 1 ? <><CheckCircle2 size={10}/> +1 WINNER</>
                  : "0 PTS"}
               </span>

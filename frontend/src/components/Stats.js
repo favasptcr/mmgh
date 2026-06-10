@@ -1,4 +1,4 @@
-import { Users, Trophy, Lock, Target, CheckCircle2, EyeOff } from "lucide-react";
+import { Users, Trophy, Lock, CheckCircle2, EyeOff } from "lucide-react";
 
 export default function Stats({ stats }) {
   return (
@@ -39,9 +39,8 @@ export default function Stats({ stats }) {
           SCORING SYSTEM
         </div>
         <div style={{ display: "grid", gap: 10 }}>
-          <Row icon={<CheckCircle2 size={16} color="#39FF14"/>} color="#39FF14" label="Correct winning team" pts="+1 pt" />
-          <Row icon={<Target size={16} color="#00F0FF"/>} color="#00F0FF" label="Exact score (draw)" pts="+3 pts" />
-          <Row icon={<Trophy size={16} color="#FFD24A"/>} color="#FFD24A" label="Perfect — winner + score" pts="+4 pts" />
+          <Row icon={<CheckCircle2 size={16} color="#39FF14"/>} color="#39FF14" label="Correct winner only" pts="+1 pt" />
+          <Row icon={<Trophy size={16} color="#FFD24A"/>} color="#FFD24A" label="Winner + exact goals" pts="+4 pts" />
         </div>
       </div>
 
