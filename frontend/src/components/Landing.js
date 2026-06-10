@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Mail, User, ArrowRight, Trophy, Sparkles } from "lucide-react";
-import MMGHLogo, { PrizeBadge } from "@/components/MMGHLogo";
+import MMGHLogo, { PrizeBadge, FrameXLogo } from "@/components/MMGHLogo";
 import { registerPlayer, setSession } from "@/lib/api";
 
 export default function Landing({ onEntered, stats }) {
@@ -160,8 +160,8 @@ export default function Landing({ onEntered, stats }) {
           </button>
         </form>
 
-        <div style={{ fontSize: 11, color: "#6b6b75", textAlign: "center" }}>
-          Prize money sponsored by <span style={{ color: "#FFD24A", fontWeight: 700 }}>FrameX LGS</span>
+        <div style={{ fontSize: 11, color: "#6b6b75", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+          <FrameXLogo height={32} />
         </div>
       </main>
     </div>

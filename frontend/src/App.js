@@ -5,7 +5,7 @@ import Landing from "@/components/Landing";
 import Predictions from "@/components/Predictions";
 import Stats from "@/components/Stats";
 import AdminPanel from "@/components/AdminPanel";
-import MMGHLogo from "@/components/MMGHLogo";
+import MMGHLogo, { FrameXLogo } from "@/components/MMGHLogo";
 import {
   getSession, clearSession,
   getAdminToken, setAdminToken, clearAdminToken,
@@ -131,9 +131,9 @@ function App() {
         />
       )}
 
-      <footer style={{ padding: "20px 16px 30px", textAlign: "center", color: "#6b6b75", fontSize: 11 }}>
-        Prize money sponsored by <span style={{ color: "#FFD24A", fontWeight: 700 }}>FrameX LGS</span>
-        · MMGH FIFA WC 2026 Prediction Contest
+      <footer style={{ padding: "24px 16px 32px", textAlign: "center", color: "#6b6b75", fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+        <FrameXLogo height={30} />
+        <div style={{ opacity: 0.7 }}>MMGH FIFA WC 2026 Prediction Contest</div>
       </footer>
     </div>
   );
