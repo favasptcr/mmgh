@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 
 from matches_data import get_seed_matches
+from score_sync import sync_results_once, sync_loop
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -131,9 +133,16 @@ async def startup():
             await db.matches.insert_one(m)
     log.info("Match seed complete: %d total matches", len(seed))
 
+    # Start background sync loop (TheSportsDB, every hour)
+    app.state.sync_task = asyncio.create_task(sync_loop(db))
+    log.info("Background score-sync task started")
+
 
 @app.on_event("shutdown")
 async def shutdown():
+    task = getattr(app.state, "sync_task", None)
+    if task:
+        task.cancel()
     client.close()
 
 
@@ -277,6 +286,13 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
     strip_id(updated)
     updated["locked_effective"] = is_locked(updated)
     return updated
+
+
+@api.post("/admin/sync")
+async def admin_sync_now(_: bool = Depends(require_admin)):
+    """Manually trigger one TheSportsDB sync cycle."""
+    res = await sync_results_once(db)
+    return res
 
 
 @api.get("/admin/leaderboard")

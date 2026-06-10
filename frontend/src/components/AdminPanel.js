@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X } from "lucide-react";
+import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap } from "lucide-react";
 import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
-  adminGetPlayers, adminDeletePlayer,
+  adminGetPlayers, adminDeletePlayer, adminSyncNow,
 } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
 
@@ -101,15 +101,36 @@ export default function AdminPanel() {
     } finally { setBusy(false); }
   };
 
+  const syncNow = async () => {
+    setBusy(true);
+    setMsg("Syncing from TheSportsDB…");
+    try {
+      const res = await adminSyncNow();
+      setMsg(`Sync complete — ${res.synced} new, ${res.finished_seen} finished, ${res.checked} checked.`);
+      await reload();
+    } catch (e) {
+      setMsg("Sync failed: " + (e?.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
   return (
     <div style={{ padding: "20px 16px 48px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
         <h2 style={{ fontFamily: "Unbounded", fontSize: 18, color: "#fff" }}>
           <span style={{ color: "#FF007F" }}>Admin</span> Control
         </h2>
-        <button onClick={reload} className="btn-ghost" data-testid="admin-refresh">
-          <RefreshCw size={12} style={{ verticalAlign: "middle", marginRight: 6 }} /> Refresh
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={syncNow} disabled={busy} className="btn-ghost" data-testid="admin-sync-now"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#00F0FF", borderColor: "rgba(0,240,255,0.4)" }}>
+            <Zap size={12} /> Sync from FIFA Now
+          </button>
+          <button onClick={reload} className="btn-ghost" data-testid="admin-refresh">
+            <RefreshCw size={12} style={{ verticalAlign: "middle", marginRight: 6 }} /> Refresh
+          </button>
+        </div>
+      </div>
+      <div style={{ marginBottom: 12, fontSize: 11, color: "#6b6b75" }}>
+        <Zap size={11} style={{ verticalAlign: "middle", color: "#00F0FF" }} /> Scores auto-sync hourly from TheSportsDB. Finished matches lock automatically — you can still manually override any score.
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
@@ -186,8 +207,13 @@ export default function AdminPanel() {
                         )}
                       </div>
                     )}
-                    <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 2 }}>
-                      {m.date} · {m.time} · {m.venue}
+                    <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 2, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>{m.date} · {m.time} · {m.venue}</span>
+                      {m.synced_source && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#00F0FF" }}>
+                          <Zap size={10} /> auto-synced
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

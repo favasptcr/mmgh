@@ -45,3 +45,6 @@ export const adminGetPlayers = () =>
 
 export const adminDeletePlayer = (email) =>
   api.delete(`/admin/player/${encodeURIComponent(email)}`, { headers: adminHeaders() }).then(r => r.data);
+
+export const adminSyncNow = () =>
+  api.post("/admin/sync", {}, { headers: adminHeaders() }).then(r => r.data);
