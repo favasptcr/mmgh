@@ -162,7 +162,7 @@ export default function Predictions({ session }) {
       {loading ? (
         <div style={{ color: "#6b6b75", textAlign: "center", padding: 40 }}>Loading matches…</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
+        <div style={{ display: "grid", width: "100%", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 14 }}>
           {filtered.map(m => (
             <MatchCard
               key={m.match_id}
