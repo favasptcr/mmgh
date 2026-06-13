@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Save, Filter, CheckCircle2 } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
+import { FrameXLogo } from "@/components/MMGHLogo";
 import { fetchMatches, fetchMe, savePredictions } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS } from "@/lib/data";
 
@@ -122,6 +123,7 @@ export default function Predictions({ session }) {
           <Stat color="#FFD24A" v={myScore.perfect} l="PERFECT (+4)" />
           <Stat color="#39FF14" v={myScore.winner} l="WINNER (+1)" />
         </div>
+        <FrameXLogo height={36} />
       </div>
 
       {/* Round chips */}
