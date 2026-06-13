@@ -345,6 +345,7 @@ export default function AdminPanel() {
         <WinnerPicksTab
           winnerPreds={winnerPreds}
           players={players}
+          leaderboard={leaderboard}
           actualWinner={actualWinner}
           setActualWinner={setActualWinner}
         />
@@ -353,29 +354,53 @@ export default function AdminPanel() {
   );
 }
 
-function WinnerPicksTab({ winnerPreds, players, actualWinner, setActualWinner }) {
+function WinnerPicksTab({ winnerPreds, players, leaderboard, actualWinner, setActualWinner }) {
+  const [drawnWinner, setDrawnWinner] = useState(null);
+
   const playerMap = useMemo(() => {
     const m = {};
     players.forEach(p => { m[p.email] = p.name; });
     return m;
   }, [players]);
 
+  const scoreMap = useMemo(() => {
+    const m = {};
+    leaderboard.forEach((p, idx) => { m[p.email] = { total: p.total, rank: idx + 1 }; });
+    return m;
+  }, [leaderboard]);
+
   const winner = actualWinner.trim().toLowerCase();
 
-  // Group predictions by team
+  const correctPickers = useMemo(() => {
+    if (!winner) return [];
+    return winnerPreds
+      .filter(p => p.team.toLowerCase() === winner)
+      .slice()
+      .sort((a, b) => {
+        // Primary: highest leaderboard score wins
+        const aScore = scoreMap[a.email]?.total ?? -1;
+        const bScore = scoreMap[b.email]?.total ?? -1;
+        if (bScore !== aScore) return bScore - aScore;
+        // Tiebreaker: earliest submission time
+        return (a.updated_at || "").localeCompare(b.updated_at || "");
+      });
+  }, [winnerPreds, winner, scoreMap]);
+
+  // Group all predictions by team for summary bar
   const byTeam = useMemo(() => {
     const map = {};
     winnerPreds.forEach(p => {
-      const t = p.team;
-      if (!map[t]) map[t] = [];
-      map[t].push(p);
+      if (!map[p.team]) map[p.team] = [];
+      map[p.team].push(p);
     });
     return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
   }, [winnerPreds]);
 
-  const correctCount = winner
-    ? winnerPreds.filter(p => p.team.toLowerCase() === winner).length
-    : 0;
+  const randomDraw = () => {
+    if (!correctPickers.length) return;
+    const picked = correctPickers[Math.floor(Math.random() * correctPickers.length)];
+    setDrawnWinner(picked.email);
+  };
 
   return (
     <div>
@@ -388,11 +413,11 @@ function WinnerPicksTab({ winnerPreds, players, actualWinner, setActualWinner })
         <Star size={16} style={{ color: "#FFD24A", flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 6 }}>
-            ACTUAL WORLD CUP WINNER (type to highlight correct picks)
+            ACTUAL WORLD CUP WINNER
           </div>
           <input
             value={actualWinner}
-            onChange={e => setActualWinner(e.target.value)}
+            onChange={e => { setActualWinner(e.target.value); setDrawnWinner(null); }}
             placeholder="e.g. Brazil, France, Argentina…"
             style={{
               background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.12)",
@@ -402,20 +427,109 @@ function WinnerPicksTab({ winnerPreds, players, actualWinner, setActualWinner })
           />
         </div>
         {winner && (
-          <div style={{
-            fontFamily: "Unbounded", fontSize: 12, fontWeight: 800,
-            color: "#FFD24A", whiteSpace: "nowrap",
-          }}>
-            {correctCount} correct {correctCount === 1 ? "pick" : "picks"}
+          <div style={{ fontFamily: "Unbounded", fontSize: 12, fontWeight: 800, color: "#FFD24A", whiteSpace: "nowrap" }}>
+            {correctPickers.length} correct {correctPickers.length === 1 ? "pick" : "picks"}
           </div>
         )}
       </div>
+
+      {/* Tiebreaker result — only when multiple correct pickers */}
+      {winner && correctPickers.length > 1 && (
+        <div className="glass-strong" style={{
+          borderRadius: 14, padding: "18px 20px", marginBottom: 16,
+          border: "1px solid rgba(255,210,74,0.5)",
+          background: "rgba(255,210,74,0.06)",
+        }}>
+          <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#FFD24A", letterSpacing: "0.25em", marginBottom: 14 }}>
+            TIEBREAKER — {correctPickers.length} PEOPLE GOT IT RIGHT
+          </div>
+
+          {/* Method A: score-based winner */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 10 }}>
+              <strong style={{ color: "#fff" }}>Method A — Highest leaderboard score wins</strong>
+              <span style={{ color: "#6b6b75" }}> · earliest pick breaks ties</span>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "14px 16px", borderRadius: 12,
+              background: "rgba(255,210,74,0.12)", border: "1px solid rgba(255,210,74,0.4)",
+            }}>
+              <Trophy size={22} style={{ color: "#FFD24A", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 16, color: "#FFD24A" }}>
+                  {playerMap[correctPickers[0].email] || correctPickers[0].email}
+                </div>
+                <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{correctPickers[0].email}</div>
+              </div>
+              <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 22, color: "#00F0FF" }}>
+                  {scoreMap[correctPickers[0].email]?.total ?? "—"}
+                </div>
+                <div style={{ fontSize: 10, color: "#6b6b75" }}>pts · rank #{scoreMap[correctPickers[0].email]?.rank ?? "?"}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Method B: random draw */}
+          <div>
+            <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 10 }}>
+              <strong style={{ color: "#fff" }}>Method B — Random draw</strong>
+              <span style={{ color: "#6b6b75" }}> · fair lottery among correct pickers</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={randomDraw}
+                className="btn-ghost"
+                style={{ display: "flex", alignItems: "center", gap: 6, color: "#FF007F", borderColor: "rgba(255,0,127,0.4)" }}
+              >
+                🎲 Draw Random Winner
+              </button>
+              {drawnWinner && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 16px", borderRadius: 12, flex: 1,
+                  background: "rgba(255,0,127,0.10)", border: "1px solid rgba(255,0,127,0.4)",
+                }}>
+                  <Trophy size={16} style={{ color: "#FF007F", flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontFamily: "Unbounded", fontWeight: 800, fontSize: 14, color: "#FF007F" }}>
+                      {playerMap[drawnWinner] || drawnWinner}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{drawnWinner}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single correct picker — instant winner */}
+      {winner && correctPickers.length === 1 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "16px 18px", borderRadius: 14, marginBottom: 16,
+          background: "rgba(255,210,74,0.12)", border: "1px solid rgba(255,210,74,0.5)",
+        }}>
+          <Trophy size={28} style={{ color: "#FFD24A", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#FFD24A", letterSpacing: "0.25em", marginBottom: 4 }}>
+              $100 WINNER
+            </div>
+            <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 18, color: "#FFD24A" }}>
+              {playerMap[correctPickers[0].email] || correctPickers[0].email}
+            </div>
+            <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{correctPickers[0].email}</div>
+          </div>
+        </div>
+      )}
 
       {winnerPreds.length === 0 ? (
         <div style={{ color: "#6b6b75", textAlign: "center", padding: 30 }}>No winner predictions submitted yet.</div>
       ) : (
         <>
-          {/* Summary by team */}
+          {/* Summary chips by team */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 10 }}>
               PICKS BY TEAM
@@ -450,47 +564,60 @@ function WinnerPicksTab({ winnerPreds, players, actualWinner, setActualWinner })
           {/* All individual picks */}
           <div className="glass" style={{ borderRadius: 14, padding: 14 }}>
             <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 12 }}>
-              ALL INDIVIDUAL PICKS
+              ALL PICKS
             </div>
             <div style={{ display: "grid", gap: 8 }}>
               {winnerPreds
                 .slice()
                 .sort((a, b) => {
-                  const aW = a.team.toLowerCase() === winner;
-                  const bW = b.team.toLowerCase() === winner;
-                  if (aW && !bW) return -1;
-                  if (!aW && bW) return 1;
+                  const aC = winner && a.team.toLowerCase() === winner;
+                  const bC = winner && b.team.toLowerCase() === winner;
+                  if (aC && !bC) return -1;
+                  if (!aC && bC) return 1;
                   return a.team.localeCompare(b.team);
                 })
                 .map(p => {
                   const isCorrect = winner && p.team.toLowerCase() === winner;
+                  const isDrawn = drawnWinner === p.email;
                   const name = playerMap[p.email] || p.email;
+                  const score = scoreMap[p.email];
+                  const submittedAt = p.updated_at ? new Date(p.updated_at).toLocaleString() : "—";
                   return (
                     <div key={p.email} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
                       gap: 12, padding: "10px 14px", borderRadius: 10,
-                      background: isCorrect ? "rgba(255,210,74,0.08)" : "rgba(0,0,0,0.25)",
-                      border: `1px solid ${isCorrect ? "rgba(255,210,74,0.4)" : "rgba(255,255,255,0.05)"}`,
+                      background: isDrawn ? "rgba(255,0,127,0.10)" : isCorrect ? "rgba(255,210,74,0.08)" : "rgba(0,0,0,0.25)",
+                      border: `1px solid ${isDrawn ? "rgba(255,0,127,0.4)" : isCorrect ? "rgba(255,210,74,0.35)" : "rgba(255,255,255,0.05)"}`,
                     }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{
-                          color: isCorrect ? "#FFD24A" : "#fff",
+                          color: isDrawn ? "#FF007F" : isCorrect ? "#FFD24A" : "#fff",
                           fontWeight: 700, fontSize: 14,
                           display: "flex", alignItems: "center", gap: 6,
                         }}>
-                          {isCorrect && <Trophy size={14} style={{ color: "#FFD24A", flexShrink: 0 }} />}
+                          {(isCorrect || isDrawn) && <Trophy size={13} style={{ color: isDrawn ? "#FF007F" : "#FFD24A", flexShrink: 0 }} />}
                           {name}
                         </div>
-                        <div style={{ color: "#6b6b75", fontSize: 11, fontFamily: "JetBrains Mono" }}>{p.email}</div>
+                        <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 2 }}>
+                          {p.email}
+                          {isCorrect && score && (
+                            <span style={{ marginLeft: 10, color: "#00F0FF" }}>
+                              {score.total}pts · rank #{score.rank}
+                            </span>
+                          )}
+                          {isCorrect && (
+                            <span style={{ marginLeft: 10, color: "#6b6b75" }}>submitted {submittedAt}</span>
+                          )}
+                        </div>
                       </div>
                       <div style={{
-                        fontFamily: "Unbounded", fontWeight: 800, fontSize: 13,
-                        color: isCorrect ? "#FFD24A" : "#A1A1AA",
-                        background: isCorrect ? "rgba(255,210,74,0.12)" : "rgba(255,255,255,0.05)",
-                        border: `1px solid ${isCorrect ? "rgba(255,210,74,0.3)" : "rgba(255,255,255,0.08)"}`,
+                        fontFamily: "Unbounded", fontWeight: 800, fontSize: 12,
+                        color: isDrawn ? "#FF007F" : isCorrect ? "#FFD24A" : "#A1A1AA",
+                        background: isDrawn ? "rgba(255,0,127,0.12)" : isCorrect ? "rgba(255,210,74,0.12)" : "rgba(255,255,255,0.05)",
+                        border: `1px solid ${isDrawn ? "rgba(255,0,127,0.3)" : isCorrect ? "rgba(255,210,74,0.3)" : "rgba(255,255,255,0.08)"}`,
                         padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap",
                       }}>
-                        {isCorrect && "🏆 "}{p.team}
+                        {p.team}
                       </div>
                     </div>
                   );
