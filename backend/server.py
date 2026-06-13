@@ -134,10 +134,25 @@ async def startup():
 
     seed = get_seed_matches()
     for m in seed:
-        existing = await db.matches.find_one({"match_id": m["match_id"]})
-        if not existing:
-            await db.matches.insert_one(m)
-    log.info("Match seed complete: %d total matches", len(seed))
+        await db.matches.update_one(
+            {"match_id": m["match_id"]},
+            {"$set": {
+                "round": m["round"],
+                "group": m["group"],
+                "date": m["date"],
+                "time": m["time"],
+                "kickoff_utc": m["kickoff_utc"],
+                "home": m["home"],
+                "away": m["away"],
+                "venue": m["venue"],
+            }, "$setOnInsert": {
+                "home_score": None,
+                "away_score": None,
+                "locked": False,
+            }},
+            upsert=True,
+        )
+    log.info("Match seed/refresh complete: %d total matches", len(seed))
 
     # Start background sync loop (TheSportsDB, every hour)
     app.state.sync_task = asyncio.create_task(sync_loop(db))
