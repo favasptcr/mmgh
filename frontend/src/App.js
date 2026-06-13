@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "@/index.css";
-import { LogOut, Lock, BarChart3, Target, ShieldCheck, X } from "lucide-react";
+import { LogOut, Lock, BarChart3, Target, ShieldCheck, X, Star } from "lucide-react";
 import Landing from "@/components/Landing";
 import Predictions from "@/components/Predictions";
 import Stats from "@/components/Stats";
 import AdminPanel from "@/components/AdminPanel";
-import MMGHLogo, { FrameXLogo } from "@/components/MMGHLogo";
+import WinnerPrediction from "@/components/WinnerPrediction";
+import MMGHLogo, { FrameXLogo, FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
 import {
   getSession, clearSession,
   getAdminToken, setAdminToken, clearAdminToken,
@@ -15,9 +16,24 @@ import {
 function App() {
   const [session, setSessionState] = useState(getSession());
   const [isAdmin, setIsAdmin] = useState(!!getAdminToken());
-  const [view, setView] = useState("predict"); // predict | stats | admin
+  const [view, setView] = useState("predict"); // predict | winner | stats | admin
   const [stats, setStats] = useState({ participants: 0, matches_total: 104, matches_scored: 0 });
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [splash, setSplash] = useState(false); // false | 'in' | 'out'
+  const splashTimers = useRef([]);
+
+  const navigateTo = (newView) => {
+    if (newView === view) return;
+    splashTimers.current.forEach(clearTimeout);
+    setSplash("in");
+    const t1 = setTimeout(() => {
+      setView(newView);
+      setSplash("out");
+      const t2 = setTimeout(() => setSplash(false), 420);
+      splashTimers.current = [t2];
+    }, 1050);
+    splashTimers.current = [t1];
+  };
 
   // Poll stats every 20s
   useEffect(() => {
@@ -77,8 +93,9 @@ function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <NavBtn active={view === "predict"} onClick={() => setView("predict")} icon={<Target size={13}/>} label="Predict" tid="nav-predict" />
-            <NavBtn active={view === "stats"} onClick={() => setView("stats")} icon={<BarChart3 size={13}/>} label="Stats" tid="nav-stats" />
+            <NavBtn active={view === "predict"} onClick={() => navigateTo("predict")} icon={<Target size={13}/>} label="Predict" tid="nav-predict" />
+            <NavBtn active={view === "winner"} onClick={() => navigateTo("winner")} icon={<Star size={13}/>} label="WC Winner" tid="nav-winner" />
+            <NavBtn active={view === "stats"} onClick={() => navigateTo("stats")} icon={<BarChart3 size={13}/>} label="Stats" tid="nav-stats" />
             {isAdmin && (
               <NavBtn active={view === "admin"} onClick={() => setView("admin")} icon={<ShieldCheck size={13}/>} label="Admin" tid="nav-admin" />
             )}
@@ -115,6 +132,7 @@ function App() {
       </header>
 
       {view === "predict" && <Predictions session={session} />}
+      {view === "winner" && <WinnerPrediction session={session} />}
       {view === "stats" && <Stats stats={stats} />}
       {view === "admin" && isAdmin && <AdminPanel />}
 
@@ -131,10 +149,48 @@ function App() {
         />
       )}
 
-      <footer style={{ padding: "24px 16px 32px", textAlign: "center", color: "#6b6b75", fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-        <FrameXLogo height={30} />
-        <div style={{ opacity: 0.7 }}>MMGH FIFA WC 2026 Prediction Contest</div>
+      <footer style={{ padding: "32px 16px 40px", textAlign: "center", color: "#6b6b75", fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <FrameXLogo height={44} />
+        <div style={{ opacity: 0.6 }}>MMGH FIFA WC 2026 Prediction Contest</div>
       </footer>
+
+      {/* Sponsor splash overlay */}
+      {splash && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(10,10,12,0.92)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          animation: splash === "in" ? "sponsorIn 300ms ease both" : "sponsorOut 420ms ease both",
+          pointerEvents: "none",
+        }}>
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+            <div style={{
+              fontFamily: "Unbounded", fontSize: 10, color: "#A1A1AA",
+              letterSpacing: "0.35em", textTransform: "uppercase",
+            }}>
+              Proudly Sponsored by
+            </div>
+            <img
+              src={FRAMEX_LOGO_URL_EXPORT}
+              alt="FrameX LGS"
+              style={{
+                height: 80,
+                width: "auto",
+                objectFit: "contain",
+                background: "#fff",
+                padding: "14px 32px",
+                borderRadius: 14,
+                boxShadow: "0 0 80px rgba(255,255,255,0.2), 0 0 160px rgba(255,255,255,0.06)",
+              }}
+            />
+            <div style={{ fontFamily: "Outfit, sans-serif", fontSize: 13, color: "#6b6b75" }}>
+              Official Sponsor · FIFA 2026 Prediction Contest
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

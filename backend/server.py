@@ -55,6 +55,11 @@ class AdminLoginIn(BaseModel):
     password: str
 
 
+class WinnerPredictionIn(BaseModel):
+    email: EmailStr
+    team: str
+
+
 class AdminResultIn(BaseModel):
     match_id: int
     home_score: Optional[int] = None
@@ -125,6 +130,7 @@ async def startup():
     await db.players.create_index("email", unique=True)
     await db.predictions.create_index([("email", 1), ("match_id", 1)], unique=True)
     await db.matches.create_index("match_id", unique=True)
+    await db.winner_predictions.create_index("email", unique=True)
 
     seed = get_seed_matches()
     for m in seed:
@@ -252,6 +258,32 @@ async def public_stats():
     }
 
 
+@api.post("/winner-prediction")
+async def save_winner_prediction(body: WinnerPredictionIn):
+    email = body.email.lower().strip()
+    player = await db.players.find_one({"email": email})
+    if not player:
+        raise HTTPException(404, "Register first")
+    team = body.team.strip()
+    if not team:
+        raise HTTPException(400, "Team is required")
+    await db.winner_predictions.update_one(
+        {"email": email},
+        {"$set": {"email": email, "team": team, "updated_at": now_utc_iso()}},
+        upsert=True,
+    )
+    return {"email": email, "team": team}
+
+
+@api.get("/winner-prediction")
+async def get_winner_prediction(email: str):
+    email = email.lower().strip()
+    pred = await db.winner_predictions.find_one({"email": email})
+    if not pred:
+        return {"team": None}
+    return {"team": pred["team"]}
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Admin endpoints
 # ────────────────────────────────────────────────────────────────────────────
@@ -353,8 +385,19 @@ async def admin_players(_: bool = Depends(require_admin)):
 async def admin_delete_player(email: str, _: bool = Depends(require_admin)):
     email = email.lower().strip()
     await db.predictions.delete_many({"email": email})
+    await db.winner_predictions.delete_many({"email": email})
     res = await db.players.delete_one({"email": email})
     return {"deleted": res.deleted_count}
+
+
+@api.get("/admin/winner-predictions")
+async def admin_winner_predictions(_: bool = Depends(require_admin)):
+    preds = []
+    async for pred in db.winner_predictions.find({}):
+        strip_id(pred)
+        preds.append(pred)
+    preds.sort(key=lambda x: x.get("updated_at", ""))
+    return preds
 
 
 app.include_router(api)

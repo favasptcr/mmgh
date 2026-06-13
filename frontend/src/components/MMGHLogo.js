@@ -54,23 +54,24 @@ export function PrizeBadge({ place, prize, color }) {
 }
 
 
-export function FrameXLogo({ height = 28, withLabel = true }) {
+export function FrameXLogo({ height = 38, withLabel = true }) {
   return (
     <span
       data-testid="framex-logo"
       style={{
         display: "inline-flex",
+        flexDirection: "column",
         alignItems: "center",
-        gap: 8,
+        gap: 7,
         verticalAlign: "middle",
       }}
     >
       {withLabel && (
         <span style={{
-          fontFamily: "Unbounded", fontSize: 10, color: "#A1A1AA",
-          letterSpacing: "0.22em", textTransform: "uppercase",
+          fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA",
+          letterSpacing: "0.3em", textTransform: "uppercase",
         }}>
-          Sponsored by
+          Proudly Sponsored by
         </span>
       )}
       <img
@@ -81,11 +82,13 @@ export function FrameXLogo({ height = 28, withLabel = true }) {
           width: "auto",
           objectFit: "contain",
           background: "#fff",
-          padding: "4px 10px",
-          borderRadius: 6,
-          boxShadow: "0 0 18px rgba(255,255,255,0.08)",
+          padding: "6px 16px",
+          borderRadius: 8,
+          boxShadow: "0 0 28px rgba(255,255,255,0.18), 0 0 60px rgba(255,255,255,0.06)",
         }}
       />
     </span>
   );
 }
+
+export const FRAMEX_LOGO_URL_EXPORT = FRAMEX_LOGO_URL;
