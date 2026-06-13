@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Mail, User, ArrowRight, Trophy, Sparkles, Star } from "lucide-react";
-import MMGHLogo, { PrizeBadge, FrameXLogo } from "@/components/MMGHLogo";
+import MMGHLogo, { PrizeBadge, FrameXLogo, SponsorBanner } from "@/components/MMGHLogo";
 import { registerPlayer, setSession } from "@/lib/api";
 
 export default function Landing({ onEntered, stats }) {
@@ -27,6 +27,7 @@ export default function Landing({ onEntered, stats }) {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+      <SponsorBanner />
       <div className="grid-bg" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
 
       <main style={{

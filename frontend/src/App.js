@@ -6,7 +6,8 @@ import Predictions from "@/components/Predictions";
 import Stats from "@/components/Stats";
 import AdminPanel from "@/components/AdminPanel";
 import WinnerPrediction from "@/components/WinnerPrediction";
-import MMGHLogo, { FrameXLogo, FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
+import MMGHLogo, { FrameXLogo, SponsorBanner, FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
+import SponsorPage from "@/components/SponsorPage";
 import {
   getSession, clearSession,
   getAdminToken, setAdminToken, clearAdminToken,
@@ -16,7 +17,7 @@ import {
 function App() {
   const [session, setSessionState] = useState(getSession());
   const [isAdmin, setIsAdmin] = useState(!!getAdminToken());
-  const [view, setView] = useState("predict"); // predict | winner | stats | admin
+  const [view, setView] = useState("predict"); // predict | winner | stats | admin | sponsor
   const [stats, setStats] = useState({ participants: 0, matches_total: 104, matches_scored: 0 });
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [splash, setSplash] = useState(false); // false | 'in' | 'out'
@@ -75,6 +76,7 @@ function App() {
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
+        <SponsorBanner onLearnMore={() => navigateTo("sponsor")} />
         <div style={{
           maxWidth: 1200, margin: "0 auto",
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -135,6 +137,7 @@ function App() {
       {view === "winner" && <WinnerPrediction session={session} />}
       {view === "stats" && <Stats stats={stats} />}
       {view === "admin" && isAdmin && <AdminPanel />}
+      {view === "sponsor" && <SponsorPage />}
 
       {/* Admin login modal */}
       {showAdminLogin && (
@@ -151,7 +154,24 @@ function App() {
 
       <footer style={{ padding: "32px 16px 40px", textAlign: "center", color: "#6b6b75", fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <FrameXLogo height={44} />
-        <div style={{ opacity: 0.6 }}>MMGH FIFA WC 2026 Prediction Contest</div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <div style={{ fontFamily: "Unbounded", fontSize: 10, color: "#E8342A", letterSpacing: "0.2em" }}>
+            OFFICIAL SPONSOR: LGS FrameX
+          </div>
+          <div style={{ opacity: 0.5 }}>MMGH FIFA WC 2026 Prediction Contest</div>
+        </div>
+        <button
+          onClick={() => navigateTo("sponsor")}
+          style={{
+            background: "rgba(232,52,42,0.10)", border: "1px solid rgba(232,52,42,0.35)",
+            borderRadius: 999, padding: "6px 18px",
+            color: "#E8342A", fontFamily: "Unbounded",
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+            cursor: "pointer",
+          }}
+        >
+          Learn about LGS FrameX →
+        </button>
       </footer>
 
       {/* Sponsor splash overlay */}

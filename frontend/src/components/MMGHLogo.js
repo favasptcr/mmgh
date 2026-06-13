@@ -56,7 +56,10 @@ export function PrizeBadge({ place, prize, color }) {
 
 export function FrameXLogo({ height = 38, withLabel = true }) {
   return (
-    <span
+    <a
+      href="https://framexlgs.com/"
+      target="_blank"
+      rel="noopener noreferrer"
       data-testid="framex-logo"
       style={{
         display: "inline-flex",
@@ -64,6 +67,7 @@ export function FrameXLogo({ height = 38, withLabel = true }) {
         alignItems: "center",
         gap: 7,
         verticalAlign: "middle",
+        textDecoration: "none",
       }}
     >
       {withLabel && (
@@ -85,9 +89,76 @@ export function FrameXLogo({ height = 38, withLabel = true }) {
           padding: "6px 16px",
           borderRadius: 8,
           boxShadow: "0 0 28px rgba(255,255,255,0.18), 0 0 60px rgba(255,255,255,0.06)",
+          transition: "box-shadow 200ms ease",
         }}
       />
-    </span>
+    </a>
+  );
+}
+
+export function SponsorBanner({ onLearnMore }) {
+  return (
+    <div style={{
+      background: "rgba(26,43,74,0.88)",
+      borderBottom: "1px solid rgba(232,52,42,0.28)",
+      padding: "5px 16px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "#E8342A", flexShrink: 0,
+          boxShadow: "0 0 6px #E8342A",
+        }} />
+        <span style={{ fontSize: 11, color: "#A1A1AA", fontFamily: "Outfit, sans-serif" }}>
+          Powered by <strong style={{ color: "#fff" }}>LGS FrameX</strong>
+        </span>
+        <a
+          href="https://framexlgs.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontSize: 10, color: "#E8342A",
+            fontFamily: "Unbounded", fontWeight: 700,
+            letterSpacing: "0.1em", textDecoration: "none",
+          }}
+        >
+          framexlgs.com ↗
+        </a>
+      </div>
+      {onLearnMore ? (
+        <button
+          onClick={onLearnMore}
+          style={{
+            background: "rgba(232,52,42,0.12)",
+            border: "1px solid rgba(232,52,42,0.4)",
+            borderRadius: 999, padding: "3px 12px",
+            color: "#E8342A", fontFamily: "Unbounded",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+            cursor: "pointer",
+          }}
+        >
+          Learn about LGS FrameX →
+        </button>
+      ) : (
+        <a
+          href="https://framexlgs.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: "rgba(232,52,42,0.12)",
+            border: "1px solid rgba(232,52,42,0.4)",
+            borderRadius: 999, padding: "3px 12px",
+            color: "#E8342A", fontFamily: "Unbounded",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+            textDecoration: "none",
+          }}
+        >
+          Learn about LGS FrameX →
+        </a>
+      )}
+    </div>
   );
 }
 
