@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import "@/index.css";
 import { LogOut, Lock, BarChart3, Target, ShieldCheck, X, Star } from "lucide-react";
 import Landing from "@/components/Landing";
@@ -6,7 +6,7 @@ import Predictions from "@/components/Predictions";
 import Stats from "@/components/Stats";
 import AdminPanel from "@/components/AdminPanel";
 import WinnerPrediction from "@/components/WinnerPrediction";
-import MMGHLogo, { FrameXLogo, SponsorBanner, FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
+import MMGHLogo, { FrameXLogo, SponsorBanner } from "@/components/MMGHLogo";
 import SponsorPage from "@/components/SponsorPage";
 import {
   getSession, clearSession,
@@ -20,20 +20,9 @@ function App() {
   const [view, setView] = useState("predict"); // predict | winner | stats | admin | sponsor
   const [stats, setStats] = useState({ participants: 0, matches_total: 104, matches_scored: 0 });
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [splash, setSplash] = useState(false); // false | 'in' | 'out'
-  const splashTimers = useRef([]);
-
   const navigateTo = (newView) => {
     if (newView === view) return;
-    splashTimers.current.forEach(clearTimeout);
-    setSplash("in");
-    const t1 = setTimeout(() => {
-      setView(newView);
-      setSplash("out");
-      const t2 = setTimeout(() => setSplash(false), 420);
-      splashTimers.current = [t2];
-    }, 1050);
-    splashTimers.current = [t1];
+    setView(newView);
   };
 
   // Poll stats every 20s
@@ -174,85 +163,6 @@ function App() {
         </button>
       </footer>
 
-      {/* Sponsor splash overlay */}
-      {splash && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(8,8,10,0.97)",
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          animation: splash === "in" ? "sponsorBgIn 220ms ease both" : "sponsorBgOut 420ms ease both",
-          pointerEvents: "none",
-        }}>
-          {/* Red radial glow behind logo */}
-          <div style={{
-            position: "absolute",
-            width: 500, height: 500,
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(232,52,42,0.12) 0%, transparent 70%)",
-            pointerEvents: "none",
-          }} />
-
-          <div style={{
-            textAlign: "center",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
-            animation: splash === "in" ? "sponsorLogoReveal 580ms cubic-bezier(0.34,1.4,0.64,1) 120ms both" : "none",
-          }}>
-            {/* Top label */}
-            <div style={{
-              fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA",
-              letterSpacing: "0.42em", textTransform: "uppercase",
-              animation: splash === "in" ? "sponsorTextReveal 400ms ease 180ms both" : "none",
-            }}>
-              Proudly Sponsored by
-            </div>
-
-            {/* Red accent line */}
-            <div style={{
-              height: 3, borderRadius: 999,
-              background: "linear-gradient(90deg, transparent, #E8342A, transparent)",
-              animation: splash === "in" ? "sponsorLineGrow 400ms ease 200ms both" : "none",
-            }} />
-
-            {/* Logo */}
-            <img
-              src={FRAMEX_LOGO_URL_EXPORT}
-              alt="FrameX LGS"
-              style={{
-                height: 140,
-                width: "auto",
-                objectFit: "contain",
-                background: "#ffffff",
-                padding: "22px 56px",
-                borderRadius: 18,
-                boxShadow: [
-                  "0 0 0 1px rgba(232,52,42,0.15)",
-                  "0 0 60px rgba(232,52,42,0.25)",
-                  "0 0 140px rgba(232,52,42,0.10)",
-                  "0 24px 80px rgba(0,0,0,0.7)",
-                ].join(", "),
-              }}
-            />
-
-            {/* Red accent line */}
-            <div style={{
-              height: 3, borderRadius: 999,
-              background: "linear-gradient(90deg, transparent, #E8342A, transparent)",
-              animation: splash === "in" ? "sponsorLineGrow 400ms ease 260ms both" : "none",
-            }} />
-
-            {/* Website */}
-            <div style={{
-              fontFamily: "Outfit, sans-serif", fontSize: 14,
-              color: "#A1A1AA", letterSpacing: "0.06em",
-              animation: splash === "in" ? "sponsorTextReveal 400ms ease 320ms both" : "none",
-            }}>
-              www.<strong style={{ color: "#fff" }}>framexlgs</strong>.com
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
