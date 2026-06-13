@@ -158,35 +158,77 @@ function App() {
       {splash && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(10,10,12,0.92)",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
+          background: "rgba(8,8,10,0.97)",
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          animation: splash === "in" ? "sponsorIn 300ms ease both" : "sponsorOut 420ms ease both",
+          animation: splash === "in" ? "sponsorBgIn 220ms ease both" : "sponsorBgOut 420ms ease both",
           pointerEvents: "none",
         }}>
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+          {/* Red radial glow behind logo */}
+          <div style={{
+            position: "absolute",
+            width: 500, height: 500,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(232,52,42,0.12) 0%, transparent 70%)",
+            pointerEvents: "none",
+          }} />
+
+          <div style={{
+            textAlign: "center",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
+            animation: splash === "in" ? "sponsorLogoReveal 580ms cubic-bezier(0.34,1.4,0.64,1) 120ms both" : "none",
+          }}>
+            {/* Top label */}
             <div style={{
-              fontFamily: "Unbounded", fontSize: 10, color: "#A1A1AA",
-              letterSpacing: "0.35em", textTransform: "uppercase",
+              fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA",
+              letterSpacing: "0.42em", textTransform: "uppercase",
+              animation: splash === "in" ? "sponsorTextReveal 400ms ease 180ms both" : "none",
             }}>
               Proudly Sponsored by
             </div>
+
+            {/* Red accent line */}
+            <div style={{
+              height: 3, borderRadius: 999,
+              background: "linear-gradient(90deg, transparent, #E8342A, transparent)",
+              animation: splash === "in" ? "sponsorLineGrow 400ms ease 200ms both" : "none",
+            }} />
+
+            {/* Logo */}
             <img
               src={FRAMEX_LOGO_URL_EXPORT}
               alt="FrameX LGS"
               style={{
-                height: 80,
+                height: 140,
                 width: "auto",
                 objectFit: "contain",
-                background: "#fff",
-                padding: "14px 32px",
-                borderRadius: 14,
-                boxShadow: "0 0 80px rgba(255,255,255,0.2), 0 0 160px rgba(255,255,255,0.06)",
+                background: "#ffffff",
+                padding: "22px 56px",
+                borderRadius: 18,
+                boxShadow: [
+                  "0 0 0 1px rgba(232,52,42,0.15)",
+                  "0 0 60px rgba(232,52,42,0.25)",
+                  "0 0 140px rgba(232,52,42,0.10)",
+                  "0 24px 80px rgba(0,0,0,0.7)",
+                ].join(", "),
               }}
             />
-            <div style={{ fontFamily: "Outfit, sans-serif", fontSize: 13, color: "#6b6b75" }}>
-              Official Sponsor · FIFA 2026 Prediction Contest
+
+            {/* Red accent line */}
+            <div style={{
+              height: 3, borderRadius: 999,
+              background: "linear-gradient(90deg, transparent, #E8342A, transparent)",
+              animation: splash === "in" ? "sponsorLineGrow 400ms ease 260ms both" : "none",
+            }} />
+
+            {/* Website */}
+            <div style={{
+              fontFamily: "Outfit, sans-serif", fontSize: 14,
+              color: "#A1A1AA", letterSpacing: "0.06em",
+              animation: splash === "in" ? "sponsorTextReveal 400ms ease 320ms both" : "none",
+            }}>
+              www.<strong style={{ color: "#fff" }}>framexlgs</strong>.com
             </div>
           </div>
         </div>
