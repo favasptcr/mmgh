@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap } from "lucide-react";
+import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap, Star } from "lucide-react";
 import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
-  adminGetPlayers, adminDeletePlayer, adminSyncNow,
+  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminGetWinnerPredictions,
 } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState("results"); // results | leaderboard | players
+  const [tab, setTab] = useState("results"); // results | leaderboard | players | winner
   const [matches, setMatches] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [winnerPreds, setWinnerPreds] = useState([]);
+  const [actualWinner, setActualWinner] = useState("");
   const [round, setRound] = useState("Group Stage");
   const [drafts, setDrafts] = useState({}); // { mid: { home_score, away_score } }
   const [editTeams, setEditTeams] = useState({}); // { mid: { home, away } }
@@ -20,10 +22,13 @@ export default function AdminPanel() {
   const reload = async () => {
     setBusy(true);
     try {
-      const [m, lb, pl] = await Promise.all([fetchMatches(), adminGetLeaderboard(), adminGetPlayers()]);
+      const [m, lb, pl, wp] = await Promise.all([
+        fetchMatches(), adminGetLeaderboard(), adminGetPlayers(), adminGetWinnerPredictions(),
+      ]);
       setMatches(m);
       setLeaderboard(lb.leaderboard);
       setPlayers(pl);
+      setWinnerPreds(wp);
     } catch (e) {
       setMsg("Failed to load admin data.");
     } finally {
@@ -138,6 +143,7 @@ export default function AdminPanel() {
           { id: "results", label: "Results" },
           { id: "leaderboard", label: `Leaderboard (${leaderboard.length})` },
           { id: "players", label: `Players (${players.length})` },
+          { id: "winner", label: `WC Winner Picks (${winnerPreds.length})` },
         ].map(t => (
           <button
             key={t.id}
@@ -333,6 +339,165 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === "winner" && (
+        <WinnerPicksTab
+          winnerPreds={winnerPreds}
+          players={players}
+          actualWinner={actualWinner}
+          setActualWinner={setActualWinner}
+        />
+      )}
+    </div>
+  );
+}
+
+function WinnerPicksTab({ winnerPreds, players, actualWinner, setActualWinner }) {
+  const playerMap = useMemo(() => {
+    const m = {};
+    players.forEach(p => { m[p.email] = p.name; });
+    return m;
+  }, [players]);
+
+  const winner = actualWinner.trim().toLowerCase();
+
+  // Group predictions by team
+  const byTeam = useMemo(() => {
+    const map = {};
+    winnerPreds.forEach(p => {
+      const t = p.team;
+      if (!map[t]) map[t] = [];
+      map[t].push(p);
+    });
+    return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [winnerPreds]);
+
+  const correctCount = winner
+    ? winnerPreds.filter(p => p.team.toLowerCase() === winner).length
+    : 0;
+
+  return (
+    <div>
+      {/* Actual winner input */}
+      <div className="glass-strong" style={{
+        borderRadius: 14, padding: "16px 18px", marginBottom: 16,
+        display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+        border: winner ? "1px solid rgba(255,210,74,0.4)" : undefined,
+      }}>
+        <Star size={16} style={{ color: "#FFD24A", flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 6 }}>
+            ACTUAL WORLD CUP WINNER (type to highlight correct picks)
+          </div>
+          <input
+            value={actualWinner}
+            onChange={e => setActualWinner(e.target.value)}
+            placeholder="e.g. Brazil, France, Argentina…"
+            style={{
+              background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 8, padding: "8px 12px", color: "#fff",
+              fontFamily: "Unbounded", fontSize: 13, outline: "none", width: "100%",
+            }}
+          />
+        </div>
+        {winner && (
+          <div style={{
+            fontFamily: "Unbounded", fontSize: 12, fontWeight: 800,
+            color: "#FFD24A", whiteSpace: "nowrap",
+          }}>
+            {correctCount} correct {correctCount === 1 ? "pick" : "picks"}
+          </div>
+        )}
+      </div>
+
+      {winnerPreds.length === 0 ? (
+        <div style={{ color: "#6b6b75", textAlign: "center", padding: 30 }}>No winner predictions submitted yet.</div>
+      ) : (
+        <>
+          {/* Summary by team */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 10 }}>
+              PICKS BY TEAM
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {byTeam.map(([team, preds]) => {
+                const isWinner = winner && team.toLowerCase() === winner;
+                return (
+                  <div key={team} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "5px 12px", borderRadius: 999,
+                    background: isWinner ? "rgba(255,210,74,0.15)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${isWinner ? "rgba(255,210,74,0.5)" : "rgba(255,255,255,0.08)"}`,
+                    color: isWinner ? "#FFD24A" : "#A1A1AA",
+                    fontFamily: "Unbounded", fontSize: 10, fontWeight: 700,
+                  }}>
+                    {isWinner && <Trophy size={11} />}
+                    {team}
+                    <span style={{
+                      background: isWinner ? "rgba(255,210,74,0.25)" : "rgba(0,0,0,0.3)",
+                      borderRadius: 999, padding: "1px 7px", fontSize: 11,
+                      color: isWinner ? "#FFD24A" : "#fff",
+                    }}>
+                      {preds.length}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* All individual picks */}
+          <div className="glass" style={{ borderRadius: 14, padding: 14 }}>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 12 }}>
+              ALL INDIVIDUAL PICKS
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {winnerPreds
+                .slice()
+                .sort((a, b) => {
+                  const aW = a.team.toLowerCase() === winner;
+                  const bW = b.team.toLowerCase() === winner;
+                  if (aW && !bW) return -1;
+                  if (!aW && bW) return 1;
+                  return a.team.localeCompare(b.team);
+                })
+                .map(p => {
+                  const isCorrect = winner && p.team.toLowerCase() === winner;
+                  const name = playerMap[p.email] || p.email;
+                  return (
+                    <div key={p.email} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      gap: 12, padding: "10px 14px", borderRadius: 10,
+                      background: isCorrect ? "rgba(255,210,74,0.08)" : "rgba(0,0,0,0.25)",
+                      border: `1px solid ${isCorrect ? "rgba(255,210,74,0.4)" : "rgba(255,255,255,0.05)"}`,
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          color: isCorrect ? "#FFD24A" : "#fff",
+                          fontWeight: 700, fontSize: 14,
+                          display: "flex", alignItems: "center", gap: 6,
+                        }}>
+                          {isCorrect && <Trophy size={14} style={{ color: "#FFD24A", flexShrink: 0 }} />}
+                          {name}
+                        </div>
+                        <div style={{ color: "#6b6b75", fontSize: 11, fontFamily: "JetBrains Mono" }}>{p.email}</div>
+                      </div>
+                      <div style={{
+                        fontFamily: "Unbounded", fontWeight: 800, fontSize: 13,
+                        color: isCorrect ? "#FFD24A" : "#A1A1AA",
+                        background: isCorrect ? "rgba(255,210,74,0.12)" : "rgba(255,255,255,0.05)",
+                        border: `1px solid ${isCorrect ? "rgba(255,210,74,0.3)" : "rgba(255,255,255,0.08)"}`,
+                        padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap",
+                      }}>
+                        {isCorrect && "🏆 "}{p.team}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
