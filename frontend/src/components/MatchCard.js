@@ -1,6 +1,7 @@
 import { Lock, MapPin, Clock, CheckCircle2, Trophy } from "lucide-react";
 import { useCountdown } from "@/lib/useCountdown";
 import { getFlag, GROUP_COLORS, ROUND_LABEL, calcPoints } from "@/lib/data";
+import { FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
 
 export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const locked = match.locked_effective || readOnly;
@@ -124,36 +125,52 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
           <span style={{ marginLeft: 8 }}>{match.date} · {match.time}</span>
         </div>
 
-        {locked && !hasResult && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#FF2A2A", fontSize: 10, fontFamily: "Unbounded", fontWeight: 700, letterSpacing: "0.12em" }}>
-            <Lock size={11} /> LOCKED
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {locked && !hasResult && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#FF2A2A", fontSize: 10, fontFamily: "Unbounded", fontWeight: 700, letterSpacing: "0.12em" }}>
+              <Lock size={11} /> LOCKED
+            </div>
+          )}
 
-        {hasResult && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{
-              fontFamily: "Unbounded", fontWeight: 800, fontSize: 12,
-              color: "#39FF14", letterSpacing: "0.1em",
-            }} data-testid={`match-result-${match.match_id}`}>
-              FT {match.home_score} – {match.away_score}
-            </span>
-            {pts !== null && (
+          {hasResult && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                padding: "3px 8px", borderRadius: 999,
-                background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
-                border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
-                color: pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A",
-                fontFamily: "Unbounded", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
-              }} data-testid={`match-points-${match.match_id}`}>
-                {pts === 4 ? <><Trophy size={10}/> +4 PERFECT</>
-                 : pts === 1 ? <><CheckCircle2 size={10}/> +1 WINNER</>
-                 : "0 PTS"}
+                fontFamily: "Unbounded", fontWeight: 800, fontSize: 12,
+                color: "#39FF14", letterSpacing: "0.1em",
+              }} data-testid={`match-result-${match.match_id}`}>
+                FT {match.home_score} – {match.away_score}
               </span>
-            )}
-          </div>
-        )}
+              {pts !== null && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 8px", borderRadius: 999,
+                  background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
+                  border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
+                  color: pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A",
+                  fontFamily: "Unbounded", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
+                }} data-testid={`match-points-${match.match_id}`}>
+                  {pts === 4 ? <><Trophy size={10}/> +4 PERFECT</>
+                   : pts === 1 ? <><CheckCircle2 size={10}/> +1 WINNER</>
+                   : "0 PTS"}
+                </span>
+              )}
+            </div>
+          )}
+
+          <img
+            src={FRAMEX_LOGO_URL_EXPORT}
+            alt="FrameX"
+            style={{
+              height: 18,
+              width: "auto",
+              objectFit: "contain",
+              background: "#fff",
+              padding: "2px 7px",
+              borderRadius: 4,
+              opacity: 0.75,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
