@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 
 from matches_data import get_seed_matches
-from score_sync import sync_results_once, sync_loop
+from score_sync import sync_results_once, sync_schedule_once, sync_loop
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -337,8 +337,16 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
 
 @api.post("/admin/sync")
 async def admin_sync_now(_: bool = Depends(require_admin)):
-    """Manually trigger one TheSportsDB sync cycle."""
+    """Manually trigger one TheSportsDB score sync cycle."""
     res = await sync_results_once(db)
+    return res
+
+
+@api.post("/admin/sync-schedule")
+async def admin_sync_schedule(_: bool = Depends(require_admin)):
+    """Pull date / time / kickoff_utc / venue from TheSportsDB for all matches.
+    Safe — never touches scores or locked state."""
+    res = await sync_schedule_once(db)
     return res
 
 

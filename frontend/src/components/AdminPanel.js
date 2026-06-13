@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap, Star } from "lucide-react";
+import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap, Star, Calendar } from "lucide-react";
 import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
-  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminGetWinnerPredictions,
+  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminSyncSchedule, adminGetWinnerPredictions,
 } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
 
@@ -108,13 +108,28 @@ export default function AdminPanel() {
 
   const syncNow = async () => {
     setBusy(true);
-    setMsg("Syncing from TheSportsDB…");
+    setMsg("Syncing scores from TheSportsDB…");
     try {
       const res = await adminSyncNow();
-      setMsg(`Sync complete — ${res.synced} new, ${res.finished_seen} finished, ${res.checked} checked.`);
+      setMsg(`Score sync complete — ${res.synced} updated, ${res.finished_seen} finished, ${res.checked} checked.`);
       await reload();
     } catch (e) {
       setMsg("Sync failed: " + (e?.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const syncSchedule = async () => {
+    setBusy(true);
+    setMsg("Syncing fixture schedule from TheSportsDB…");
+    try {
+      const res = await adminSyncSchedule();
+      setMsg(
+        `Schedule sync complete — ${res.updated} matches updated, ${res.checked} checked` +
+        (res.unmatched_count ? `, ${res.unmatched_count} unmatched.` : ".")
+      );
+      await reload();
+    } catch (e) {
+      setMsg("Schedule sync failed: " + (e?.response?.data?.detail || e.message));
     } finally { setBusy(false); }
   };
 
@@ -127,7 +142,11 @@ export default function AdminPanel() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={syncNow} disabled={busy} className="btn-ghost" data-testid="admin-sync-now"
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#00F0FF", borderColor: "rgba(0,240,255,0.4)" }}>
-            <Zap size={12} /> Sync from FIFA Now
+            <Zap size={12} /> Sync Scores Now
+          </button>
+          <button onClick={syncSchedule} disabled={busy} className="btn-ghost" data-testid="admin-sync-schedule"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#FFD24A", borderColor: "rgba(255,210,74,0.4)" }}>
+            <Calendar size={12} /> Sync Schedule
           </button>
           <button onClick={reload} className="btn-ghost" data-testid="admin-refresh">
             <RefreshCw size={12} style={{ verticalAlign: "middle", marginRight: 6 }} /> Refresh

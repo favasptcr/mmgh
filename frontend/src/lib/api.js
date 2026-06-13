@@ -49,6 +49,9 @@ export const adminDeletePlayer = (email) =>
 export const adminSyncNow = () =>
   api.post("/admin/sync", {}, { headers: adminHeaders() }).then(r => r.data);
 
+export const adminSyncSchedule = () =>
+  api.post("/admin/sync-schedule", {}, { headers: adminHeaders() }).then(r => r.data);
+
 export const saveWinnerPrediction = (email, team) =>
   api.post("/winner-prediction", { email, team }).then(r => r.data);
 
