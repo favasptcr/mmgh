@@ -1,6 +1,6 @@
 import { ExternalLink, MapPin, Phone, Mail, Clock, Zap, Shield, Leaf, Building2, Facebook, Linkedin, Instagram } from "lucide-react";
 
-const FRAMEX_LOGO_URL = "https://customer-assets.emergentagent.com/job_tool-681/artifacts/z4y5nm01_FrameX_Color_Horizontal_RGB.png";
+const FRAMEX_LOCAL_VERTICAL = "/FrameX_Color_Vertical_RGB.png";
 const FRAMEX_URL = "https://framexlgs.com/";
 
 const FEATURES = [
@@ -56,15 +56,16 @@ export default function SponsorPage() {
             OFFICIAL SPONSOR — MMGH FIFA 2026
           </div>
 
-          <a href={FRAMEX_URL} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginBottom: 24 }}>
+          <a
+            href={FRAMEX_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}
+          >
             <img
-              src={FRAMEX_LOGO_URL}
+              src={FRAMEX_LOCAL_VERTICAL}
               alt="LGS FrameX"
-              style={{
-                height: 70, width: "auto", objectFit: "contain",
-                background: "#fff", padding: "12px 32px", borderRadius: 12,
-                boxShadow: "0 0 0 1px rgba(232,52,42,0.2), 0 0 40px rgba(232,52,42,0.2)",
-              }}
+              style={{ height: 160, width: "auto", objectFit: "contain" }}
             />
           </a>
 
