@@ -1,7 +1,8 @@
 import { Lock, MapPin, Clock, CheckCircle2, Trophy } from "lucide-react";
 import { useCountdown } from "@/lib/useCountdown";
 import { getFlag, GROUP_COLORS, ROUND_LABEL, calcPoints } from "@/lib/data";
-import { FRAMEX_LOGO_URL_EXPORT } from "@/components/MMGHLogo";
+
+const FRAMEX_LOCAL = "/framex-logo.jpg";
 
 export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const locked = match.locked_effective || readOnly;
@@ -158,16 +159,16 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
           )}
 
           <img
-            src={FRAMEX_LOGO_URL_EXPORT}
+            src={FRAMEX_LOCAL}
             alt="FrameX"
             style={{
-              height: 18,
+              height: 48,
               width: "auto",
               objectFit: "contain",
               background: "#fff",
-              padding: "2px 7px",
-              borderRadius: 4,
-              opacity: 0.75,
+              padding: "4px",
+              borderRadius: 6,
+              boxShadow: "0 0 12px rgba(232,52,42,0.18)",
             }}
           />
         </div>
