@@ -1,48 +1,48 @@
-"""Auto-sync FIFA World Cup 2026 results from TheSportsDB (free, no API key).
+"""Auto-sync FIFA World Cup 2026 results from ESPN's public scoreboard API.
 
-Uses eventsround.php?id=4429&r={round}&s=2026 which returns all matches in a round.
-Rounds tried: 1, 2, 3 (group-stage matchdays) and common knockout round codes.
+ESPN returns all WC matches per UTC day and is more complete than TheSportsDB's
+free tier (which only returns ~5 matches per round).
+
+Endpoint: https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=YYYYMMDD
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+import unicodedata
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional, Dict, Any, List
 
 import requests
 
 log = logging.getLogger(__name__)
 
-THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3"
-WC2026_LEAGUE_ID = "4429"
-SEASON = "2026"
+ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
 SYNC_INTERVAL_SECONDS = 60 * 60  # 1 hour
 
-# Round codes to scan. Group stage = 1/2/3. Common knockout codes per TheSportsDB.
-ROUNDS_TO_SCAN = [1, 2, 3, 125, 150, 200, 500, 25, 250]
+TOURNAMENT_START = date(2026, 6, 11)
+TOURNAMENT_END = date(2026, 7, 19)
 
-FINISHED_STATUSES = {
-    "match finished", "ft", "full time", "finished",
-    "aet", "after extra time", "after penalties", "pen",
-}
-
-# Team-name aliases: our internal name -> list of possible TheSportsDB names (normalized)
+# Internal name → possible ESPN/external name variations (before normalization)
 TEAM_NAME_ALIASES: Dict[str, List[str]] = {
     "USA": ["united states", "usa", "united states of america"],
+    "Turkey": ["turkiye", "turkey"],           # ESPN uses "Türkiye"
     "South Korea": ["korea republic", "south korea"],
-    "Bosnia & Herz.": ["bosnia and herzegovina", "bosnia herzegovina"],
+    "Bosnia & Herz.": ["bosnia and herzegovina", "bosnia herzegovina", "bosnia-herzegovina"],
     "DRC": ["dr congo", "democratic republic of the congo", "congo dr"],
-    "Ivory Coast": ["cote divoire", "ivory coast"],
+    "Ivory Coast": ["cote divoire", "ivory coast", "cote d'ivoire"],
     "Czechia": ["czech republic", "czechia"],
     "Cape Verde": ["cape verde islands", "cape verde", "cabo verde"],
-    "Curacao": ["curacao"],
+    "Curacao": ["curacao"],                    # ESPN uses "Curaçao" → accent-stripped to "curacao"
 }
 
 
 def _normalize(name: Optional[str]) -> str:
     if not name:
         return ""
+    # Strip unicode accents: Türkiye→Turkiye, Curaçao→Curacao, etc.
+    nfkd = unicodedata.normalize("NFD", name)
+    no_accents = "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
     return (
-        name.lower().strip()
+        no_accents.lower().strip()
         .replace(".", "")
         .replace("&", "and")
         .replace("-", " ")
@@ -61,28 +61,56 @@ def teams_match(our_name: str, their_name: str) -> bool:
     return any(_normalize(x) == b for x in aliases)
 
 
-def _fetch_round_sync(r: int) -> List[Dict[str, Any]]:
+def _fetch_espn_day_sync(date_str: str) -> List[Dict[str, Any]]:
+    """Fetch all WC matches for a UTC date (YYYY-MM-DD) from ESPN."""
     try:
         resp = requests.get(
-            f"{THESPORTSDB_BASE}/eventsround.php",
-            params={"id": WC2026_LEAGUE_ID, "r": r, "s": SEASON},
+            ESPN_SCOREBOARD,
+            params={"dates": date_str.replace("-", "")},  # ESPN wants YYYYMMDD
             timeout=10,
         )
         if resp.status_code != 200:
             return []
         data = resp.json()
-        return data.get("events") or []
+        result = []
+        for ev in data.get("events") or []:
+            comp = ((ev.get("competitions") or []) + [{}])[0]
+            competitors = comp.get("competitors") or []
+            home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+            away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+            if not home or not away:
+                continue
+            status_type = (comp.get("status") or {}).get("type") or {}
+            venue_obj = comp.get("venue") or {}
+            result.append({
+                "home_team": (home.get("team") or {}).get("displayName", ""),
+                "away_team": (away.get("team") or {}).get("displayName", ""),
+                "start_utc": comp.get("startDate") or ev.get("date", ""),
+                "completed": bool(status_type.get("completed")),
+                "home_score": home.get("score"),
+                "away_score": away.get("score"),
+                "venue": venue_obj.get("fullName") or "",
+            })
+        return result
     except Exception as e:
-        log.warning("TheSportsDB R%s fetch failed: %s", r, e)
+        log.warning("ESPN day %s fetch failed: %s", date_str, e)
         return []
 
 
-async def fetch_round(r: int) -> List[Dict[str, Any]]:
-    return await asyncio.to_thread(_fetch_round_sync, r)
+async def fetch_espn_day(date_str: str) -> List[Dict[str, Any]]:
+    return await asyncio.to_thread(_fetch_espn_day_sync, date_str)
+
+
+def _days_range(start: date, end: date) -> List[str]:
+    days, d = [], start
+    while d <= end:
+        days.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+    return days
 
 
 async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, Any]]:
-    """Find a match by team names only — used for schedule sync where date may differ."""
+    """Find a local match by team names — date-independent."""
     async for m in db.matches.find({}):
         if teams_match(m["home"], home) and teams_match(m["away"], away):
             return m
@@ -91,36 +119,45 @@ async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, A
     return None
 
 
-async def sync_results_once(db) -> Dict[str, Any]:
-    """Run one sync cycle. Returns counters and a small trace."""
+async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
+    """Pull scores from ESPN for all recently finished matches.
+
+    full_scan=True  — scans every tournament day from Jun 11 → today+1 UTC.
+                      Used by the admin "Sync Scores Now" button.
+    full_scan=False — scans the last 3 UTC days only (faster; used by hourly loop).
+    """
     synced = 0
     checked = 0
     finished_seen = 0
     matched_to_local = 0
     trace = []
 
-    for r in ROUNDS_TO_SCAN:
-        events = await fetch_round(r)
+    today_utc = datetime.now(timezone.utc).date()
+    # +1 day: catch late-night matches (e.g. 9 PM PT = next UTC day)
+    end = min(today_utc + timedelta(days=1), TOURNAMENT_END)
+    start = TOURNAMENT_START if full_scan else max(TOURNAMENT_START, today_utc - timedelta(days=3))
+
+    for date_str in _days_range(start, end):
+        events = await fetch_espn_day(date_str)
         if not events:
             continue
         for ev in events:
             checked += 1
-            status = (ev.get("strStatus") or "").lower().strip()
-            if status not in FINISHED_STATUSES:
+            if not ev["completed"]:
                 continue
             finished_seen += 1
-            home = ev.get("strHomeTeam") or ""
-            away = ev.get("strAwayTeam") or ""
+            home = ev["home_team"]
+            away = ev["away_team"]
             try:
-                hs = int(ev.get("intHomeScore"))
-                a_s = int(ev.get("intAwayScore"))
+                hs = int(ev["home_score"])
+                a_s = int(ev["away_score"])
             except (TypeError, ValueError):
                 continue
             match = await _find_match_by_teams(db, home, away)
             if not match:
+                log.warning("Sync: no local match for %s vs %s", home, away)
                 continue
             matched_to_local += 1
-            # Skip if already-synced identical
             if (match.get("home_score") == hs and
                     match.get("away_score") == a_s and
                     match.get("locked")):
@@ -132,7 +169,7 @@ async def sync_results_once(db) -> Dict[str, Any]:
                     "away_score": a_s,
                     "locked": True,
                     "synced_at": datetime.now(timezone.utc).isoformat(),
-                    "synced_source": "thesportsdb",
+                    "synced_source": "espn",
                 }},
             )
             synced += 1
@@ -149,77 +186,56 @@ async def sync_results_once(db) -> Dict[str, Any]:
 
 
 async def sync_schedule_once(db) -> Dict[str, Any]:
-    """Pull date / time / kickoff_utc / venue from TheSportsDB for every match.
+    """Pull kickoff time and venue from ESPN for every match.
 
-    Safe to run at any time — never touches home_score, away_score, or locked.
-    Derives display time in ET from the UTC timestamp so it is always consistent.
+    Safe — never touches home_score, away_score, or locked.
+    Stores display time in ET converted from ESPN's UTC startDate.
     """
     from zoneinfo import ZoneInfo
-
     ET = ZoneInfo("America/New_York")
+
     updated = 0
     checked = 0
     unmatched: List[str] = []
 
-    for r in ROUNDS_TO_SCAN:
-        events = await fetch_round(r)
+    for date_str in _days_range(TOURNAMENT_START, TOURNAMENT_END):
+        events = await fetch_espn_day(date_str)
         for ev in events:
             checked += 1
-            home_raw = ev.get("strHomeTeam") or ""
-            away_raw = ev.get("strAwayTeam") or ""
+            home_raw = ev["home_team"]
+            away_raw = ev["away_team"]
             if not home_raw or not away_raw:
                 continue
 
-            # --- Build kickoff_utc from strTimestamp or dateEvent+strTime ---
-            kickoff_utc: Optional[str] = None
-            ts_str = ev.get("strTimestamp") or ""
-            if ts_str:
-                try:
-                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    kickoff_utc = dt.astimezone(timezone.utc).isoformat()
-                except Exception:
-                    pass
-            if not kickoff_utc:
-                date_s = ev.get("dateEvent") or ""
-                time_s = (ev.get("strTime") or "").strip()
-                if date_s and time_s:
-                    try:
-                        dt = datetime.strptime(f"{date_s} {time_s}", "%Y-%m-%d %H:%M:%S")
-                        kickoff_utc = dt.replace(tzinfo=timezone.utc).isoformat()
-                    except Exception:
-                        pass
-
-            if not kickoff_utc:
+            start_utc_str = ev.get("start_utc") or ""
+            if not start_utc_str:
                 unmatched.append(f"no timestamp: {home_raw} vs {away_raw}")
                 continue
 
-            # --- Derive local-display date + time in ET ---
-            dt_utc = datetime.fromisoformat(kickoff_utc)
+            try:
+                dt_utc = datetime.fromisoformat(start_utc_str.replace("Z", "+00:00"))
+                kickoff_utc = dt_utc.astimezone(timezone.utc).isoformat()
+            except Exception:
+                unmatched.append(f"bad timestamp: {home_raw} vs {away_raw}")
+                continue
+
             dt_et = dt_utc.astimezone(ET)
             local_date = dt_et.strftime("%Y-%m-%d")
             hour = dt_et.strftime("%I").lstrip("0") or "12"
             local_time = f"{hour}:{dt_et.strftime('%M %p')} ET"
 
-            # --- Venue (TheSportsDB name — more authoritative than our seed) ---
-            venue = (ev.get("strVenue") or "").strip() or None
+            venue = ev.get("venue") or ""
 
-            # --- Match by team names (date-independent — TheSportsDB may use UTC date) ---
             match = await _find_match_by_teams(db, home_raw, away_raw)
             if not match:
                 unmatched.append(f"{home_raw} vs {away_raw}")
                 continue
 
-            update: Dict[str, Any] = {
-                "kickoff_utc": kickoff_utc,
-                "date": local_date,
-                "time": local_time,
-            }
+            update: Dict[str, Any] = {"kickoff_utc": kickoff_utc, "date": local_date, "time": local_time}
             if venue:
                 update["venue"] = venue
 
-            # Only write if something actually changed
-            changed = any(match.get(k) != v for k, v in update.items())
-            if not changed:
+            if not any(match.get(k) != v for k, v in update.items()):
                 continue
 
             await db.matches.update_one(
@@ -227,11 +243,8 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                 {"$set": {**update, "schedule_synced_at": datetime.now(timezone.utc).isoformat()}},
             )
             updated += 1
-            log.info(
-                "Schedule sync: #%s %s vs %s → %s %s %s",
-                match["match_id"], home_raw, away_raw, local_date, local_time,
-                venue or "",
-            )
+            log.info("Schedule sync: #%s %s vs %s → %s %s %s",
+                     match["match_id"], home_raw, away_raw, local_date, local_time, venue)
 
     return {
         "updated": updated,
@@ -242,13 +255,12 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
 
 async def sync_loop(db):
-    """Run forever in background."""
-    log.info("Auto-sync loop starting (interval=%ds, source=TheSportsDB)", SYNC_INTERVAL_SECONDS)
-    # Initial small delay so startup logs settle
+    """Run forever in background — quick 3-day scan every hour."""
+    log.info("Auto-sync loop starting (interval=%ds, source=ESPN)", SYNC_INTERVAL_SECONDS)
     await asyncio.sleep(5)
     while True:
         try:
-            res = await sync_results_once(db)
+            res = await sync_results_once(db, full_scan=False)
             log.info("Auto-sync cycle: %s", res)
         except asyncio.CancelledError:
             log.info("Auto-sync loop cancelled")
