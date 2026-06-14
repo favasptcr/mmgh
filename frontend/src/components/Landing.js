@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Mail, User, ArrowRight, Trophy, Sparkles } from "lucide-react";
-import MMGHLogo, { PrizeBadge, FrameXLogo } from "@/components/MMGHLogo";
+import { Mail, User, ArrowRight, Trophy, Sparkles, Star } from "lucide-react";
+import MMGHLogo, { PrizeBadge, FrameXLogo, SponsorBanner } from "@/components/MMGHLogo";
 import { registerPlayer, setSession } from "@/lib/api";
 
 export default function Landing({ onEntered, stats }) {
@@ -27,6 +27,7 @@ export default function Landing({ onEntered, stats }) {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+      <SponsorBanner />
       <div className="grid-bg" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
 
       <main style={{
@@ -73,10 +74,31 @@ export default function Landing({ onEntered, stats }) {
         </div>
 
         {/* Prize Badges */}
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
-          <PrizeBadge place="1ST PLACE" prize="$250" color="#FFD24A" />
-          <PrizeBadge place="2ND PLACE" prize="$100" color="#A1A1AA" />
-          <PrizeBadge place="3RD PLACE" prize="$50" color="#FF7F50" />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
+            <PrizeBadge place="1ST PLACE" prize="$250" color="#FFD24A" />
+            <PrizeBadge place="2ND PLACE" prize="$100" color="#A1A1AA" />
+            <PrizeBadge place="3RD PLACE" prize="$50" color="#FF7F50" />
+          </div>
+          {/* Bonus prize */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 20px", borderRadius: 12,
+            background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.35)",
+          }}>
+            <Star size={14} style={{ color: "#FFD700", flexShrink: 0 }} />
+            <div>
+              <span style={{ fontFamily: "Unbounded", fontSize: 10, color: "#A1A1AA", letterSpacing: "0.15em" }}>
+                BONUS PRIZE
+              </span>
+              <span style={{ fontFamily: "Unbounded", fontSize: 12, fontWeight: 800, color: "#FFD700", marginLeft: 10 }}>
+                $100
+              </span>
+              <span style={{ fontSize: 12, color: "#E4E4E7", marginLeft: 8 }}>
+                — Correct World Cup Winner Pick
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Scoring */}
@@ -160,7 +182,7 @@ export default function Landing({ onEntered, stats }) {
         </form>
 
         <div style={{ fontSize: 11, color: "#6b6b75", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <FrameXLogo height={32} />
+          <FrameXLogo height={44} />
         </div>
       </main>
     </div>

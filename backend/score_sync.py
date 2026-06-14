@@ -90,6 +90,16 @@ async def _find_match_for_event(db, date_str: str, home: str, away: str) -> Opti
     return None
 
 
+async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, Any]]:
+    """Find a match by team names only — used for schedule sync where date may differ."""
+    async for m in db.matches.find({}):
+        if teams_match(m["home"], home) and teams_match(m["away"], away):
+            return m
+        if teams_match(m["home"], away) and teams_match(m["away"], home):
+            return m
+    return None
+
+
 async def sync_results_once(db) -> Dict[str, Any]:
     """Run one sync cycle. Returns counters and a small trace."""
     synced = 0
@@ -147,6 +157,99 @@ async def sync_results_once(db) -> Dict[str, Any]:
         "finished_seen": finished_seen,
         "matched_to_local": matched_to_local,
         "trace": trace[:10],
+    }
+
+
+async def sync_schedule_once(db) -> Dict[str, Any]:
+    """Pull date / time / kickoff_utc / venue from TheSportsDB for every match.
+
+    Safe to run at any time — never touches home_score, away_score, or locked.
+    Derives display time in ET from the UTC timestamp so it is always consistent.
+    """
+    from zoneinfo import ZoneInfo
+
+    ET = ZoneInfo("America/New_York")
+    updated = 0
+    checked = 0
+    unmatched: List[str] = []
+
+    for r in ROUNDS_TO_SCAN:
+        events = await fetch_round(r)
+        for ev in events:
+            checked += 1
+            home_raw = ev.get("strHomeTeam") or ""
+            away_raw = ev.get("strAwayTeam") or ""
+            if not home_raw or not away_raw:
+                continue
+
+            # --- Build kickoff_utc from strTimestamp or dateEvent+strTime ---
+            kickoff_utc: Optional[str] = None
+            ts_str = ev.get("strTimestamp") or ""
+            if ts_str:
+                try:
+                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    kickoff_utc = dt.astimezone(timezone.utc).isoformat()
+                except Exception:
+                    pass
+            if not kickoff_utc:
+                date_s = ev.get("dateEvent") or ""
+                time_s = (ev.get("strTime") or "").strip()
+                if date_s and time_s:
+                    try:
+                        dt = datetime.strptime(f"{date_s} {time_s}", "%Y-%m-%d %H:%M:%S")
+                        kickoff_utc = dt.replace(tzinfo=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+
+            if not kickoff_utc:
+                unmatched.append(f"no timestamp: {home_raw} vs {away_raw}")
+                continue
+
+            # --- Derive local-display date + time in ET ---
+            dt_utc = datetime.fromisoformat(kickoff_utc)
+            dt_et = dt_utc.astimezone(ET)
+            local_date = dt_et.strftime("%Y-%m-%d")
+            hour = dt_et.strftime("%I").lstrip("0") or "12"
+            local_time = f"{hour}:{dt_et.strftime('%M %p')} ET"
+
+            # --- Venue (TheSportsDB name — more authoritative than our seed) ---
+            venue = (ev.get("strVenue") or "").strip() or None
+
+            # --- Match by team names (date-independent — TheSportsDB may use UTC date) ---
+            match = await _find_match_by_teams(db, home_raw, away_raw)
+            if not match:
+                unmatched.append(f"{home_raw} vs {away_raw}")
+                continue
+
+            update: Dict[str, Any] = {
+                "kickoff_utc": kickoff_utc,
+                "date": local_date,
+                "time": local_time,
+            }
+            if venue:
+                update["venue"] = venue
+
+            # Only write if something actually changed
+            changed = any(match.get(k) != v for k, v in update.items())
+            if not changed:
+                continue
+
+            await db.matches.update_one(
+                {"match_id": match["match_id"]},
+                {"$set": {**update, "schedule_synced_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            updated += 1
+            log.info(
+                "Schedule sync: #%s %s vs %s → %s %s %s",
+                match["match_id"], home_raw, away_raw, local_date, local_time,
+                venue or "",
+            )
+
+    return {
+        "updated": updated,
+        "checked": checked,
+        "unmatched_count": len(unmatched),
+        "unmatched_sample": unmatched[:10],
     }
 
 

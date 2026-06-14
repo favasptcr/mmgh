@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 
 from matches_data import get_seed_matches
-from score_sync import sync_results_once, sync_loop
+from score_sync import sync_results_once, sync_schedule_once, sync_loop
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -53,6 +53,11 @@ class PredictionsBulkIn(BaseModel):
 
 class AdminLoginIn(BaseModel):
     password: str
+
+
+class WinnerPredictionIn(BaseModel):
+    email: EmailStr
+    team: str
 
 
 class AdminResultIn(BaseModel):
@@ -125,13 +130,29 @@ async def startup():
     await db.players.create_index("email", unique=True)
     await db.predictions.create_index([("email", 1), ("match_id", 1)], unique=True)
     await db.matches.create_index("match_id", unique=True)
+    await db.winner_predictions.create_index("email", unique=True)
 
     seed = get_seed_matches()
     for m in seed:
-        existing = await db.matches.find_one({"match_id": m["match_id"]})
-        if not existing:
-            await db.matches.insert_one(m)
-    log.info("Match seed complete: %d total matches", len(seed))
+        await db.matches.update_one(
+            {"match_id": m["match_id"]},
+            {"$set": {
+                "round": m["round"],
+                "group": m["group"],
+                "date": m["date"],
+                "time": m["time"],
+                "kickoff_utc": m["kickoff_utc"],
+                "home": m["home"],
+                "away": m["away"],
+                "venue": m["venue"],
+            }, "$setOnInsert": {
+                "home_score": None,
+                "away_score": None,
+                "locked": False,
+            }},
+            upsert=True,
+        )
+    log.info("Match seed/refresh complete: %d total matches", len(seed))
 
     # Start background sync loop (TheSportsDB, every hour)
     app.state.sync_task = asyncio.create_task(sync_loop(db))
@@ -252,6 +273,32 @@ async def public_stats():
     }
 
 
+@api.post("/winner-prediction")
+async def save_winner_prediction(body: WinnerPredictionIn):
+    email = body.email.lower().strip()
+    player = await db.players.find_one({"email": email})
+    if not player:
+        raise HTTPException(404, "Register first")
+    team = body.team.strip()
+    if not team:
+        raise HTTPException(400, "Team is required")
+    await db.winner_predictions.update_one(
+        {"email": email},
+        {"$set": {"email": email, "team": team, "updated_at": now_utc_iso()}},
+        upsert=True,
+    )
+    return {"email": email, "team": team}
+
+
+@api.get("/winner-prediction")
+async def get_winner_prediction(email: str):
+    email = email.lower().strip()
+    pred = await db.winner_predictions.find_one({"email": email})
+    if not pred:
+        return {"team": None}
+    return {"team": pred["team"]}
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Admin endpoints
 # ────────────────────────────────────────────────────────────────────────────
@@ -290,8 +337,16 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
 
 @api.post("/admin/sync")
 async def admin_sync_now(_: bool = Depends(require_admin)):
-    """Manually trigger one TheSportsDB sync cycle."""
+    """Manually trigger one TheSportsDB score sync cycle."""
     res = await sync_results_once(db)
+    return res
+
+
+@api.post("/admin/sync-schedule")
+async def admin_sync_schedule(_: bool = Depends(require_admin)):
+    """Pull date / time / kickoff_utc / venue from TheSportsDB for all matches.
+    Safe — never touches scores or locked state."""
+    res = await sync_schedule_once(db)
     return res
 
 
@@ -353,8 +408,19 @@ async def admin_players(_: bool = Depends(require_admin)):
 async def admin_delete_player(email: str, _: bool = Depends(require_admin)):
     email = email.lower().strip()
     await db.predictions.delete_many({"email": email})
+    await db.winner_predictions.delete_many({"email": email})
     res = await db.players.delete_one({"email": email})
     return {"deleted": res.deleted_count}
+
+
+@api.get("/admin/winner-predictions")
+async def admin_winner_predictions(_: bool = Depends(require_admin)):
+    preds = []
+    async for pred in db.winner_predictions.find({}):
+        strip_id(pred)
+        preds.append(pred)
+    preds.sort(key=lambda x: x.get("updated_at", ""))
+    return preds
 
 
 app.include_router(api)

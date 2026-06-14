@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap } from "lucide-react";
+import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap, Star, Calendar } from "lucide-react";
 import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
-  adminGetPlayers, adminDeletePlayer, adminSyncNow,
+  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminSyncSchedule, adminGetWinnerPredictions,
 } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState("results"); // results | leaderboard | players
+  const [tab, setTab] = useState("results"); // results | leaderboard | players | winner
   const [matches, setMatches] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [winnerPreds, setWinnerPreds] = useState([]);
+  const [actualWinner, setActualWinner] = useState("");
   const [round, setRound] = useState("Group Stage");
   const [drafts, setDrafts] = useState({}); // { mid: { home_score, away_score } }
   const [editTeams, setEditTeams] = useState({}); // { mid: { home, away } }
@@ -20,10 +22,13 @@ export default function AdminPanel() {
   const reload = async () => {
     setBusy(true);
     try {
-      const [m, lb, pl] = await Promise.all([fetchMatches(), adminGetLeaderboard(), adminGetPlayers()]);
+      const [m, lb, pl, wp] = await Promise.all([
+        fetchMatches(), adminGetLeaderboard(), adminGetPlayers(), adminGetWinnerPredictions(),
+      ]);
       setMatches(m);
       setLeaderboard(lb.leaderboard);
       setPlayers(pl);
+      setWinnerPreds(wp);
     } catch (e) {
       setMsg("Failed to load admin data.");
     } finally {
@@ -103,13 +108,28 @@ export default function AdminPanel() {
 
   const syncNow = async () => {
     setBusy(true);
-    setMsg("Syncing from TheSportsDB…");
+    setMsg("Syncing scores from TheSportsDB…");
     try {
       const res = await adminSyncNow();
-      setMsg(`Sync complete — ${res.synced} new, ${res.finished_seen} finished, ${res.checked} checked.`);
+      setMsg(`Score sync complete — ${res.synced} updated, ${res.finished_seen} finished, ${res.checked} checked.`);
       await reload();
     } catch (e) {
       setMsg("Sync failed: " + (e?.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const syncSchedule = async () => {
+    setBusy(true);
+    setMsg("Syncing fixture schedule from TheSportsDB…");
+    try {
+      const res = await adminSyncSchedule();
+      setMsg(
+        `Schedule sync complete — ${res.updated} matches updated, ${res.checked} checked` +
+        (res.unmatched_count ? `, ${res.unmatched_count} unmatched.` : ".")
+      );
+      await reload();
+    } catch (e) {
+      setMsg("Schedule sync failed: " + (e?.response?.data?.detail || e.message));
     } finally { setBusy(false); }
   };
 
@@ -122,7 +142,11 @@ export default function AdminPanel() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={syncNow} disabled={busy} className="btn-ghost" data-testid="admin-sync-now"
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#00F0FF", borderColor: "rgba(0,240,255,0.4)" }}>
-            <Zap size={12} /> Sync from FIFA Now
+            <Zap size={12} /> Sync Scores Now
+          </button>
+          <button onClick={syncSchedule} disabled={busy} className="btn-ghost" data-testid="admin-sync-schedule"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#FFD24A", borderColor: "rgba(255,210,74,0.4)" }}>
+            <Calendar size={12} /> Sync Schedule
           </button>
           <button onClick={reload} className="btn-ghost" data-testid="admin-refresh">
             <RefreshCw size={12} style={{ verticalAlign: "middle", marginRight: 6 }} /> Refresh
@@ -138,6 +162,7 @@ export default function AdminPanel() {
           { id: "results", label: "Results" },
           { id: "leaderboard", label: `Leaderboard (${leaderboard.length})` },
           { id: "players", label: `Players (${players.length})` },
+          { id: "winner", label: `WC Winner Picks (${winnerPreds.length})` },
         ].map(t => (
           <button
             key={t.id}
@@ -333,6 +358,292 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === "winner" && (
+        <WinnerPicksTab
+          winnerPreds={winnerPreds}
+          players={players}
+          leaderboard={leaderboard}
+          actualWinner={actualWinner}
+          setActualWinner={setActualWinner}
+        />
+      )}
+    </div>
+  );
+}
+
+function WinnerPicksTab({ winnerPreds, players, leaderboard, actualWinner, setActualWinner }) {
+  const [drawnWinner, setDrawnWinner] = useState(null);
+
+  const playerMap = useMemo(() => {
+    const m = {};
+    players.forEach(p => { m[p.email] = p.name; });
+    return m;
+  }, [players]);
+
+  const scoreMap = useMemo(() => {
+    const m = {};
+    leaderboard.forEach((p, idx) => { m[p.email] = { total: p.total, rank: idx + 1 }; });
+    return m;
+  }, [leaderboard]);
+
+  const winner = actualWinner.trim().toLowerCase();
+
+  const correctPickers = useMemo(() => {
+    if (!winner) return [];
+    return winnerPreds
+      .filter(p => p.team.toLowerCase() === winner)
+      .slice()
+      .sort((a, b) => {
+        // Primary: highest leaderboard score wins
+        const aScore = scoreMap[a.email]?.total ?? -1;
+        const bScore = scoreMap[b.email]?.total ?? -1;
+        if (bScore !== aScore) return bScore - aScore;
+        // Tiebreaker: earliest submission time
+        return (a.updated_at || "").localeCompare(b.updated_at || "");
+      });
+  }, [winnerPreds, winner, scoreMap]);
+
+  // Group all predictions by team for summary bar
+  const byTeam = useMemo(() => {
+    const map = {};
+    winnerPreds.forEach(p => {
+      if (!map[p.team]) map[p.team] = [];
+      map[p.team].push(p);
+    });
+    return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [winnerPreds]);
+
+  const randomDraw = () => {
+    if (!correctPickers.length) return;
+    const picked = correctPickers[Math.floor(Math.random() * correctPickers.length)];
+    setDrawnWinner(picked.email);
+  };
+
+  return (
+    <div>
+      {/* Actual winner input */}
+      <div className="glass-strong" style={{
+        borderRadius: 14, padding: "16px 18px", marginBottom: 16,
+        display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+        border: winner ? "1px solid rgba(255,210,74,0.4)" : undefined,
+      }}>
+        <Star size={16} style={{ color: "#FFD24A", flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 6 }}>
+            ACTUAL WORLD CUP WINNER
+          </div>
+          <input
+            value={actualWinner}
+            onChange={e => { setActualWinner(e.target.value); setDrawnWinner(null); }}
+            placeholder="e.g. Brazil, France, Argentina…"
+            style={{
+              background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 8, padding: "8px 12px", color: "#fff",
+              fontFamily: "Unbounded", fontSize: 13, outline: "none", width: "100%",
+            }}
+          />
+        </div>
+        {winner && (
+          <div style={{ fontFamily: "Unbounded", fontSize: 12, fontWeight: 800, color: "#FFD24A", whiteSpace: "nowrap" }}>
+            {correctPickers.length} correct {correctPickers.length === 1 ? "pick" : "picks"}
+          </div>
+        )}
+      </div>
+
+      {/* Tiebreaker result — only when multiple correct pickers */}
+      {winner && correctPickers.length > 1 && (
+        <div className="glass-strong" style={{
+          borderRadius: 14, padding: "18px 20px", marginBottom: 16,
+          border: "1px solid rgba(255,210,74,0.5)",
+          background: "rgba(255,210,74,0.06)",
+        }}>
+          <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#FFD24A", letterSpacing: "0.25em", marginBottom: 14 }}>
+            TIEBREAKER — {correctPickers.length} PEOPLE GOT IT RIGHT
+          </div>
+
+          {/* Method A: score-based winner */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 10 }}>
+              <strong style={{ color: "#fff" }}>Method A — Highest leaderboard score wins</strong>
+              <span style={{ color: "#6b6b75" }}> · earliest pick breaks ties</span>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "14px 16px", borderRadius: 12,
+              background: "rgba(255,210,74,0.12)", border: "1px solid rgba(255,210,74,0.4)",
+            }}>
+              <Trophy size={22} style={{ color: "#FFD24A", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 16, color: "#FFD24A" }}>
+                  {playerMap[correctPickers[0].email] || correctPickers[0].email}
+                </div>
+                <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{correctPickers[0].email}</div>
+              </div>
+              <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 22, color: "#00F0FF" }}>
+                  {scoreMap[correctPickers[0].email]?.total ?? "—"}
+                </div>
+                <div style={{ fontSize: 10, color: "#6b6b75" }}>pts · rank #{scoreMap[correctPickers[0].email]?.rank ?? "?"}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Method B: random draw */}
+          <div>
+            <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 10 }}>
+              <strong style={{ color: "#fff" }}>Method B — Random draw</strong>
+              <span style={{ color: "#6b6b75" }}> · fair lottery among correct pickers</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={randomDraw}
+                className="btn-ghost"
+                style={{ display: "flex", alignItems: "center", gap: 6, color: "#FF007F", borderColor: "rgba(255,0,127,0.4)" }}
+              >
+                🎲 Draw Random Winner
+              </button>
+              {drawnWinner && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 16px", borderRadius: 12, flex: 1,
+                  background: "rgba(255,0,127,0.10)", border: "1px solid rgba(255,0,127,0.4)",
+                }}>
+                  <Trophy size={16} style={{ color: "#FF007F", flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontFamily: "Unbounded", fontWeight: 800, fontSize: 14, color: "#FF007F" }}>
+                      {playerMap[drawnWinner] || drawnWinner}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{drawnWinner}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single correct picker — instant winner */}
+      {winner && correctPickers.length === 1 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "16px 18px", borderRadius: 14, marginBottom: 16,
+          background: "rgba(255,210,74,0.12)", border: "1px solid rgba(255,210,74,0.5)",
+        }}>
+          <Trophy size={28} style={{ color: "#FFD24A", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#FFD24A", letterSpacing: "0.25em", marginBottom: 4 }}>
+              $100 WINNER
+            </div>
+            <div style={{ fontFamily: "Unbounded", fontWeight: 900, fontSize: 18, color: "#FFD24A" }}>
+              {playerMap[correctPickers[0].email] || correctPickers[0].email}
+            </div>
+            <div style={{ fontSize: 11, color: "#6b6b75", fontFamily: "JetBrains Mono" }}>{correctPickers[0].email}</div>
+          </div>
+        </div>
+      )}
+
+      {winnerPreds.length === 0 ? (
+        <div style={{ color: "#6b6b75", textAlign: "center", padding: 30 }}>No winner predictions submitted yet.</div>
+      ) : (
+        <>
+          {/* Summary chips by team */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 10 }}>
+              PICKS BY TEAM
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {byTeam.map(([team, preds]) => {
+                const isWinner = winner && team.toLowerCase() === winner;
+                return (
+                  <div key={team} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "5px 12px", borderRadius: 999,
+                    background: isWinner ? "rgba(255,210,74,0.15)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${isWinner ? "rgba(255,210,74,0.5)" : "rgba(255,255,255,0.08)"}`,
+                    color: isWinner ? "#FFD24A" : "#A1A1AA",
+                    fontFamily: "Unbounded", fontSize: 10, fontWeight: 700,
+                  }}>
+                    {isWinner && <Trophy size={11} />}
+                    {team}
+                    <span style={{
+                      background: isWinner ? "rgba(255,210,74,0.25)" : "rgba(0,0,0,0.3)",
+                      borderRadius: 999, padding: "1px 7px", fontSize: 11,
+                      color: isWinner ? "#FFD24A" : "#fff",
+                    }}>
+                      {preds.length}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* All individual picks */}
+          <div className="glass" style={{ borderRadius: 14, padding: 14 }}>
+            <div style={{ fontFamily: "Unbounded", fontSize: 9, color: "#A1A1AA", letterSpacing: "0.25em", marginBottom: 12 }}>
+              ALL PICKS
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {winnerPreds
+                .slice()
+                .sort((a, b) => {
+                  const aC = winner && a.team.toLowerCase() === winner;
+                  const bC = winner && b.team.toLowerCase() === winner;
+                  if (aC && !bC) return -1;
+                  if (!aC && bC) return 1;
+                  return a.team.localeCompare(b.team);
+                })
+                .map(p => {
+                  const isCorrect = winner && p.team.toLowerCase() === winner;
+                  const isDrawn = drawnWinner === p.email;
+                  const name = playerMap[p.email] || p.email;
+                  const score = scoreMap[p.email];
+                  const submittedAt = p.updated_at ? new Date(p.updated_at).toLocaleString() : "—";
+                  return (
+                    <div key={p.email} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      gap: 12, padding: "10px 14px", borderRadius: 10,
+                      background: isDrawn ? "rgba(255,0,127,0.10)" : isCorrect ? "rgba(255,210,74,0.08)" : "rgba(0,0,0,0.25)",
+                      border: `1px solid ${isDrawn ? "rgba(255,0,127,0.4)" : isCorrect ? "rgba(255,210,74,0.35)" : "rgba(255,255,255,0.05)"}`,
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          color: isDrawn ? "#FF007F" : isCorrect ? "#FFD24A" : "#fff",
+                          fontWeight: 700, fontSize: 14,
+                          display: "flex", alignItems: "center", gap: 6,
+                        }}>
+                          {(isCorrect || isDrawn) && <Trophy size={13} style={{ color: isDrawn ? "#FF007F" : "#FFD24A", flexShrink: 0 }} />}
+                          {name}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 2 }}>
+                          {p.email}
+                          {isCorrect && score && (
+                            <span style={{ marginLeft: 10, color: "#00F0FF" }}>
+                              {score.total}pts · rank #{score.rank}
+                            </span>
+                          )}
+                          {isCorrect && (
+                            <span style={{ marginLeft: 10, color: "#6b6b75" }}>submitted {submittedAt}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{
+                        fontFamily: "Unbounded", fontWeight: 800, fontSize: 12,
+                        color: isDrawn ? "#FF007F" : isCorrect ? "#FFD24A" : "#A1A1AA",
+                        background: isDrawn ? "rgba(255,0,127,0.12)" : isCorrect ? "rgba(255,210,74,0.12)" : "rgba(255,255,255,0.05)",
+                        border: `1px solid ${isDrawn ? "rgba(255,0,127,0.3)" : isCorrect ? "rgba(255,210,74,0.3)" : "rgba(255,255,255,0.08)"}`,
+                        padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap",
+                      }}>
+                        {p.team}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
