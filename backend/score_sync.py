@@ -81,15 +81,6 @@ async def fetch_round(r: int) -> List[Dict[str, Any]]:
     return await asyncio.to_thread(_fetch_round_sync, r)
 
 
-async def _find_match_for_event(db, date_str: str, home: str, away: str) -> Optional[Dict[str, Any]]:
-    async for m in db.matches.find({"date": date_str}):
-        if teams_match(m["home"], home) and teams_match(m["away"], away):
-            return m
-        if teams_match(m["home"], away) and teams_match(m["away"], home):
-            return m
-    return None
-
-
 async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, Any]]:
     """Find a match by team names only — used for schedule sync where date may differ."""
     async for m in db.matches.find({}):
@@ -125,10 +116,7 @@ async def sync_results_once(db) -> Dict[str, Any]:
                 a_s = int(ev.get("intAwayScore"))
             except (TypeError, ValueError):
                 continue
-            date_str = ev.get("dateEvent")
-            if not date_str:
-                continue
-            match = await _find_match_for_event(db, date_str, home, away)
+            match = await _find_match_by_teams(db, home, away)
             if not match:
                 continue
             matched_to_local += 1
