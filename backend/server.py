@@ -337,8 +337,8 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
 
 @api.post("/admin/sync")
 async def admin_sync_now(_: bool = Depends(require_admin)):
-    """Manually trigger one TheSportsDB score sync cycle."""
-    res = await sync_results_once(db)
+    """Manually trigger a full-tournament TheSportsDB score sync."""
+    res = await sync_results_once(db, full_scan=True)
     return res
 
 

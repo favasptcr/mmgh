@@ -1,11 +1,13 @@
 """Auto-sync FIFA World Cup 2026 results from TheSportsDB (free, no API key).
 
-Uses eventsround.php?id=4429&r={round}&s=2026 which returns all matches in a round.
-Rounds tried: 1, 2, 3 (group-stage matchdays) and common knockout round codes.
+Uses eventsday.php?l=4429&d=YYYY-MM-DD which returns all matches for a given UTC day.
+Admin "Sync Scores Now" does a full tournament scan; the hourly background loop
+scans only the last 3 days for speed.
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+import unicodedata
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional, Dict, Any, List
 
 import requests
@@ -14,18 +16,17 @@ log = logging.getLogger(__name__)
 
 THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3"
 WC2026_LEAGUE_ID = "4429"
-SEASON = "2026"
 SYNC_INTERVAL_SECONDS = 60 * 60  # 1 hour
 
-# Round codes to scan. Group stage = 1/2/3. Common knockout codes per TheSportsDB.
-ROUNDS_TO_SCAN = [1, 2, 3, 125, 150, 200, 500, 25, 250]
+TOURNAMENT_START = date(2026, 6, 11)
+TOURNAMENT_END = date(2026, 7, 19)
 
 FINISHED_STATUSES = {
     "match finished", "ft", "full time", "finished",
     "aet", "after extra time", "after penalties", "pen",
 }
 
-# Team-name aliases: our internal name -> list of possible TheSportsDB names (normalized)
+# Internal name → possible TheSportsDB names (before normalization)
 TEAM_NAME_ALIASES: Dict[str, List[str]] = {
     "USA": ["united states", "usa", "united states of america"],
     "South Korea": ["korea republic", "south korea"],
@@ -34,15 +35,18 @@ TEAM_NAME_ALIASES: Dict[str, List[str]] = {
     "Ivory Coast": ["cote divoire", "ivory coast"],
     "Czechia": ["czech republic", "czechia"],
     "Cape Verde": ["cape verde islands", "cape verde", "cabo verde"],
-    "Curacao": ["curacao"],
+    "Curacao": ["curacao"],  # accents stripped by _normalize: Curaçao → Curacao
 }
 
 
 def _normalize(name: Optional[str]) -> str:
     if not name:
         return ""
+    # Strip unicode accents so Curaçao == Curacao, etc.
+    nfkd = unicodedata.normalize("NFD", name)
+    no_accents = "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
     return (
-        name.lower().strip()
+        no_accents.lower().strip()
         .replace(".", "")
         .replace("&", "and")
         .replace("-", " ")
@@ -61,11 +65,11 @@ def teams_match(our_name: str, their_name: str) -> bool:
     return any(_normalize(x) == b for x in aliases)
 
 
-def _fetch_round_sync(r: int) -> List[Dict[str, Any]]:
+def _fetch_day_sync(date_str: str) -> List[Dict[str, Any]]:
     try:
         resp = requests.get(
-            f"{THESPORTSDB_BASE}/eventsround.php",
-            params={"id": WC2026_LEAGUE_ID, "r": r, "s": SEASON},
+            f"{THESPORTSDB_BASE}/eventsday.php",
+            params={"l": WC2026_LEAGUE_ID, "d": date_str},
             timeout=10,
         )
         if resp.status_code != 200:
@@ -73,16 +77,25 @@ def _fetch_round_sync(r: int) -> List[Dict[str, Any]]:
         data = resp.json()
         return data.get("events") or []
     except Exception as e:
-        log.warning("TheSportsDB R%s fetch failed: %s", r, e)
+        log.warning("TheSportsDB day %s fetch failed: %s", date_str, e)
         return []
 
 
-async def fetch_round(r: int) -> List[Dict[str, Any]]:
-    return await asyncio.to_thread(_fetch_round_sync, r)
+async def fetch_day(date_str: str) -> List[Dict[str, Any]]:
+    return await asyncio.to_thread(_fetch_day_sync, date_str)
+
+
+def _days_range(start: date, end: date) -> List[str]:
+    days = []
+    d = start
+    while d <= end:
+        days.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+    return days
 
 
 async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, Any]]:
-    """Find a match by team names only — used for schedule sync where date may differ."""
+    """Find a match by team names — date-independent so UTC/local date differences don't matter."""
     async for m in db.matches.find({}):
         if teams_match(m["home"], home) and teams_match(m["away"], away):
             return m
@@ -91,16 +104,30 @@ async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, A
     return None
 
 
-async def sync_results_once(db) -> Dict[str, Any]:
-    """Run one sync cycle. Returns counters and a small trace."""
+async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
+    """Run one sync cycle. Returns counters and a small trace.
+
+    full_scan=True  — scans all tournament days from Jun 11 to today+1 UTC.
+                      Used by the admin "Sync Scores Now" button.
+    full_scan=False — scans last 3 UTC days only (faster; used by hourly loop).
+    """
     synced = 0
     checked = 0
     finished_seen = 0
     matched_to_local = 0
     trace = []
 
-    for r in ROUNDS_TO_SCAN:
-        events = await fetch_round(r)
+    today_utc = datetime.now(timezone.utc).date()
+    # Include tomorrow UTC in case a late-night match crosses midnight
+    end = min(today_utc + timedelta(days=1), TOURNAMENT_END)
+
+    if full_scan:
+        start = TOURNAMENT_START
+    else:
+        start = max(TOURNAMENT_START, today_utc - timedelta(days=3))
+
+    for date_str in _days_range(start, end):
+        events = await fetch_day(date_str)
         if not events:
             continue
         for ev in events:
@@ -118,9 +145,10 @@ async def sync_results_once(db) -> Dict[str, Any]:
                 continue
             match = await _find_match_by_teams(db, home, away)
             if not match:
+                log.warning("Sync: no local match for %s vs %s", home, away)
                 continue
             matched_to_local += 1
-            # Skip if already-synced identical
+            # Skip if already-synced with identical scores
             if (match.get("home_score") == hs and
                     match.get("away_score") == a_s and
                     match.get("locked")):
@@ -161,8 +189,8 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
     checked = 0
     unmatched: List[str] = []
 
-    for r in ROUNDS_TO_SCAN:
-        events = await fetch_round(r)
+    for date_str in _days_range(TOURNAMENT_START, TOURNAMENT_END):
+        events = await fetch_day(date_str)
         for ev in events:
             checked += 1
             home_raw = ev.get("strHomeTeam") or ""
@@ -170,7 +198,6 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
             if not home_raw or not away_raw:
                 continue
 
-            # --- Build kickoff_utc from strTimestamp or dateEvent+strTime ---
             kickoff_utc: Optional[str] = None
             ts_str = ev.get("strTimestamp") or ""
             if ts_str:
@@ -193,17 +220,14 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                 unmatched.append(f"no timestamp: {home_raw} vs {away_raw}")
                 continue
 
-            # --- Derive local-display date + time in ET ---
             dt_utc = datetime.fromisoformat(kickoff_utc)
             dt_et = dt_utc.astimezone(ET)
             local_date = dt_et.strftime("%Y-%m-%d")
             hour = dt_et.strftime("%I").lstrip("0") or "12"
             local_time = f"{hour}:{dt_et.strftime('%M %p')} ET"
 
-            # --- Venue (TheSportsDB name — more authoritative than our seed) ---
             venue = (ev.get("strVenue") or "").strip() or None
 
-            # --- Match by team names (date-independent — TheSportsDB may use UTC date) ---
             match = await _find_match_by_teams(db, home_raw, away_raw)
             if not match:
                 unmatched.append(f"{home_raw} vs {away_raw}")
@@ -217,7 +241,6 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
             if venue:
                 update["venue"] = venue
 
-            # Only write if something actually changed
             changed = any(match.get(k) != v for k, v in update.items())
             if not changed:
                 continue
@@ -242,13 +265,12 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
 
 async def sync_loop(db):
-    """Run forever in background."""
+    """Run forever in background — quick 3-day scan every hour."""
     log.info("Auto-sync loop starting (interval=%ds, source=TheSportsDB)", SYNC_INTERVAL_SECONDS)
-    # Initial small delay so startup logs settle
     await asyncio.sleep(5)
     while True:
         try:
-            res = await sync_results_once(db)
+            res = await sync_results_once(db, full_scan=False)
             log.info("Auto-sync cycle: %s", res)
         except asyncio.CancelledError:
             log.info("Auto-sync loop cancelled")
