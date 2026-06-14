@@ -318,7 +318,6 @@ export default function AdminPanel() {
                     <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {p.name}
                     </div>
-                    <div style={{ color: "#6b6b75", fontSize: 11, fontFamily: "JetBrains Mono" }}>{p.email}</div>
                   </div>
                   <span style={{ color: "#FFD24A", fontFamily: "Unbounded", fontSize: 11 }}>🏆 {p.perfect}</span>
                   <span style={{ color: "#39FF14", fontFamily: "Unbounded", fontSize: 11 }}>✓ {p.correct}</span>
