@@ -93,9 +93,12 @@ export default function Predictions({ session }) {
       if (!p) continue;
       const ph = Number(p.home_score), pa = Number(p.away_score);
       if (Number.isNaN(ph) || Number.isNaN(pa)) continue;
+      const isKnockout = !m.group;
       const pts = calcPoints(ph, pa, m.home_score, m.away_score,
-                             p.penalty_home_score ?? null, p.penalty_away_score ?? null,
-                             m.penalty_home_score ?? null, m.penalty_away_score ?? null);
+                             isKnockout ? (p.penalty_home_score ?? null) : null,
+                             isKnockout ? (p.penalty_away_score ?? null) : null,
+                             isKnockout ? (m.penalty_home_score ?? null) : null,
+                             isKnockout ? (m.penalty_away_score ?? null) : null);
       if (pts == null) continue;
       total += pts;
       if (pts >= 4) perfect++;

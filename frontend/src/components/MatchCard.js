@@ -22,11 +22,14 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
     homeVal !== "" && awayVal !== "" &&
     Number(homeVal) === Number(awayVal);
 
+  const isKnockout = !match.group;
   const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
     ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
                  match.home_score, match.away_score,
-                 prediction.penalty_home_score ?? null, prediction.penalty_away_score ?? null,
-                 match.penalty_home_score ?? null, match.penalty_away_score ?? null)
+                 isKnockout ? (prediction.penalty_home_score ?? null) : null,
+                 isKnockout ? (prediction.penalty_away_score ?? null) : null,
+                 isKnockout ? (match.penalty_home_score ?? null) : null,
+                 isKnockout ? (match.penalty_away_score ?? null) : null)
     : null;
 
   const handleHome = (v) => {

@@ -460,10 +460,13 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
             if not match:
                 continue
             predicted += 1
+            is_knockout = not match.get("group")
             pts = calc_points(pr["home_score"], pr["away_score"],
                               match.get("home_score"), match.get("away_score"),
-                              pr.get("penalty_home_score"), pr.get("penalty_away_score"),
-                              match.get("penalty_home_score"), match.get("penalty_away_score"))
+                              pr.get("penalty_home_score") if is_knockout else None,
+                              pr.get("penalty_away_score") if is_knockout else None,
+                              match.get("penalty_home_score") if is_knockout else None,
+                              match.get("penalty_away_score") if is_knockout else None)
             if pts is None:
                 continue
             total += pts
