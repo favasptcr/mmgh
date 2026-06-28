@@ -184,11 +184,14 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 if not match:
                     log.warning("Sync: no local match for %s vs %s", home, away)
                     continue
-                await db.matches.update_one(
-                    {"match_id": match["match_id"]},
-                    {"$set": {"home": home, "away": away}},
-                )
-                log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
+                # Completed matches always have real names, but guard anyway
+                if (not _normalize(home).startswith("tbd") and
+                        not _normalize(away).startswith("tbd")):
+                    await db.matches.update_one(
+                        {"match_id": match["match_id"]},
+                        {"$set": {"home": home, "away": away}},
+                    )
+                    log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
             matched_to_local += 1
             if (match.get("home_score") == hs and
                     match.get("away_score") == a_s and
@@ -264,11 +267,17 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                 if not match:
                     unmatched.append(f"{home_raw} vs {away_raw}")
                     continue
-                await db.matches.update_one(
-                    {"match_id": match["match_id"]},
-                    {"$set": {"home": home_raw, "away": away_raw}},
+                # Only write real team names — don't overwrite "TBD R32-X" with ESPN's own "TBD"
+                espn_has_real_teams = (
+                    not _normalize(home_raw).startswith("tbd") and
+                    not _normalize(away_raw).startswith("tbd")
                 )
-                log.info("Schedule sync: auto-set teams #%s: %s vs %s", match["match_id"], home_raw, away_raw)
+                if espn_has_real_teams:
+                    await db.matches.update_one(
+                        {"match_id": match["match_id"]},
+                        {"$set": {"home": home_raw, "away": away_raw}},
+                    )
+                    log.info("Schedule sync: auto-set teams #%s: %s vs %s", match["match_id"], home_raw, away_raw)
 
             update: Dict[str, Any] = {"kickoff_utc": kickoff_utc, "date": local_date, "time": local_time}
             if venue:
