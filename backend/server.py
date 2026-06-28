@@ -353,6 +353,14 @@ async def admin_sync_schedule(_: bool = Depends(require_admin)):
     return res
 
 
+@api.get("/admin/espn-check")
+async def admin_espn_check(date: str, _: bool = Depends(require_admin)):
+    """Return raw ESPN events for a date (YYYY-MM-DD) — debug only."""
+    from score_sync import fetch_espn_day
+    events = await fetch_espn_day(date)
+    return {"date": date, "count": len(events), "events": events}
+
+
 @api.get("/admin/leaderboard")
 async def admin_leaderboard(_: bool = Depends(require_admin)):
     # Build leaderboard from all players + predictions + matches
