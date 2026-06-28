@@ -146,6 +146,9 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
     else:
         pred_winner = None
 
+    # None vs None = both drew (group stage draw correctly predicted)
+    if actual_winner is None and pred_winner is None:
+        return 1 + pen_bonus
     if actual_winner and pred_winner == actual_winner:
         return 1 + pen_bonus
 

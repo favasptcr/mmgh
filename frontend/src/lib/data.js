@@ -101,6 +101,8 @@ export function calcPoints(predH, predA, actH, actA,
   if (!predWinner && predPenH != null && predPenA != null) {
     predWinner = Number(predPenH) > Number(predPenA) ? "home" : "away";
   }
+  // null vs null = both drew (group stage draw correctly predicted)
+  if (actualWinner === null && predWinner === null) return 1 + penBonus;
   if (actualWinner && predWinner === actualWinner) return 1 + penBonus;
 
   return penBonus;
