@@ -119,6 +119,31 @@ async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, A
     return None
 
 
+async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[str, Any]]:
+    """Find a TBD knockout match by kickoff time (±90 min window).
+
+    Used as fallback when team names are still placeholders (e.g. 'TBD R32-1').
+    """
+    if not start_utc_str:
+        return None
+    try:
+        dt_espn = datetime.fromisoformat(start_utc_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    window = timedelta(minutes=30)
+    async for m in db.matches.find({"home": {"$regex": "^TBD"}}):
+        ko_str = m.get("kickoff_utc")
+        if not ko_str:
+            continue
+        try:
+            dt_local = datetime.fromisoformat(ko_str)
+            if abs(dt_local - dt_espn) <= window:
+                return m
+        except Exception:
+            continue
+    return None
+
+
 async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
     """Pull scores from ESPN for all recently finished matches.
 
@@ -155,8 +180,15 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 continue
             match = await _find_match_by_teams(db, home, away)
             if not match:
-                log.warning("Sync: no local match for %s vs %s", home, away)
-                continue
+                match = await _find_tbd_match_by_kickoff(db, ev.get("start_utc", ""))
+                if not match:
+                    log.warning("Sync: no local match for %s vs %s", home, away)
+                    continue
+                await db.matches.update_one(
+                    {"match_id": match["match_id"]},
+                    {"$set": {"home": home, "away": away}},
+                )
+                log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
             matched_to_local += 1
             if (match.get("home_score") == hs and
                     match.get("away_score") == a_s and
@@ -228,8 +260,15 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
             match = await _find_match_by_teams(db, home_raw, away_raw)
             if not match:
-                unmatched.append(f"{home_raw} vs {away_raw}")
-                continue
+                match = await _find_tbd_match_by_kickoff(db, start_utc_str)
+                if not match:
+                    unmatched.append(f"{home_raw} vs {away_raw}")
+                    continue
+                await db.matches.update_one(
+                    {"match_id": match["match_id"]},
+                    {"$set": {"home": home_raw, "away": away_raw}},
+                )
+                log.info("Schedule sync: auto-set teams #%s: %s vs %s", match["match_id"], home_raw, away_raw)
 
             update: Dict[str, Any] = {"kickoff_utc": kickoff_utc, "date": local_date, "time": local_time}
             if venue:
@@ -255,9 +294,18 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
 
 async def sync_loop(db):
-    """Run forever in background — quick 3-day scan every hour."""
+    """Run forever in background — score sync every hour, schedule sync every 6 hours."""
     log.info("Auto-sync loop starting (interval=%ds, source=ESPN)", SYNC_INTERVAL_SECONDS)
     await asyncio.sleep(5)
+
+    # Run schedule sync immediately on startup to populate TBD team names
+    try:
+        res = await sync_schedule_once(db)
+        log.info("Startup schedule sync: %s", res)
+    except Exception as e:
+        log.exception("Startup schedule sync error: %s", e)
+
+    cycle = 0
     while True:
         try:
             res = await sync_results_once(db, full_scan=False)
@@ -267,4 +315,14 @@ async def sync_loop(db):
             raise
         except Exception as e:
             log.exception("Auto-sync loop error: %s", e)
+
+        cycle += 1
+        # Re-run schedule sync every 6 hours to catch bracket updates (TBD → real teams)
+        if cycle % 6 == 0:
+            try:
+                res = await sync_schedule_once(db)
+                log.info("Periodic schedule sync: %s", res)
+            except Exception as e:
+                log.exception("Periodic schedule sync error: %s", e)
+
         await asyncio.sleep(SYNC_INTERVAL_SECONDS)

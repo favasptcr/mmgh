@@ -137,15 +137,18 @@ async def startup():
         await db.matches.update_one(
             {"match_id": m["match_id"]},
             {"$set": {
+                # Only structural fields that never change — safe to overwrite always
                 "round": m["round"],
                 "group": m["group"],
+            }, "$setOnInsert": {
+                # Schedule/team fields only written on first insert so that
+                # sync_schedule_once and admin edits survive server restarts
                 "date": m["date"],
                 "time": m["time"],
                 "kickoff_utc": m["kickoff_utc"],
+                "venue": m["venue"],
                 "home": m["home"],
                 "away": m["away"],
-                "venue": m["venue"],
-            }, "$setOnInsert": {
                 "home_score": None,
                 "away_score": None,
                 "locked": False,
