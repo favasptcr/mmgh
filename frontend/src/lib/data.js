@@ -11,7 +11,11 @@ export const FLAG_EMOJIS = {
   "Argentina": "🇦🇷", "Algeria": "🇩🇿", "Austria": "🇦🇹", "Jordan": "🇯🇴",
   "Portugal": "🇵🇹", "DRC": "🇨🇩", "Uzbekistan": "🇺🇿", "Colombia": "🇨🇴",
   "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
-  "Denmark": "🇩🇰",
+  "Denmark": "🇩🇰", "Sweden": "🇸🇪",
+  // ESPN display names differ from seed names — add both so flags work after sync
+  "United States": "🇺🇸", "Bosnia-Herzegovina": "🇧🇦",
+  "Congo DR": "🇨🇩", "Cote d'Ivoire": "🇨🇮", "Türkiye": "🇹🇷",
+  "Cabo Verde": "🇨🇻", "Korea Republic": "🇰🇷",
 };
 
 export const getFlag = (team) => {
