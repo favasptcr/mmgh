@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Lock, Unlock, Save, RefreshCw, Trash2, Trophy, Pencil, Check, X, Zap, Star, Calendar } from "lucide-react";
 import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
-  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminSyncSchedule, adminGetWinnerPredictions,
+  adminGetPlayers, adminDeletePlayer, adminSyncNow, adminSyncSchedule, adminFixTbdKickoffs, adminGetWinnerPredictions,
 } from "@/lib/api";
 import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
 
@@ -108,7 +108,7 @@ export default function AdminPanel() {
 
   const syncNow = async () => {
     setBusy(true);
-    setMsg("Syncing scores from TheSportsDB…");
+    setMsg("Syncing scores from ESPN…");
     try {
       const res = await adminSyncNow();
       setMsg(`Score sync complete — ${res.synced} updated, ${res.finished_seen} finished, ${res.checked} checked.`);
@@ -120,7 +120,7 @@ export default function AdminPanel() {
 
   const syncSchedule = async () => {
     setBusy(true);
-    setMsg("Syncing fixture schedule from TheSportsDB…");
+    setMsg("Syncing fixture schedule from ESPN…");
     try {
       const res = await adminSyncSchedule();
       setMsg(
@@ -130,6 +130,22 @@ export default function AdminPanel() {
       await reload();
     } catch (e) {
       setMsg("Schedule sync failed: " + (e?.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const fixTbdKickoffs = async () => {
+    setBusy(true);
+    setMsg("Fixing TBD match kickoff times from seed data…");
+    try {
+      const res = await adminFixTbdKickoffs();
+      const sched = res.schedule_sync || {};
+      setMsg(
+        `TBD kickoff fix complete — ${res.patched_match_ids?.length ?? 0} slots re-timed, ` +
+        `${sched.updated ?? 0} matches updated from ESPN.`
+      );
+      await reload();
+    } catch (e) {
+      setMsg("Fix failed: " + (e?.response?.data?.detail || e.message));
     } finally { setBusy(false); }
   };
 
@@ -148,13 +164,17 @@ export default function AdminPanel() {
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#FFD24A", borderColor: "rgba(255,210,74,0.4)" }}>
             <Calendar size={12} /> Sync Schedule
           </button>
+          <button onClick={fixTbdKickoffs} disabled={busy} className="btn-ghost" data-testid="admin-fix-tbd-kickoffs"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#FF007F", borderColor: "rgba(255,0,127,0.4)" }}>
+            <Zap size={12} /> Fix TBD Times
+          </button>
           <button onClick={reload} className="btn-ghost" data-testid="admin-refresh">
             <RefreshCw size={12} style={{ verticalAlign: "middle", marginRight: 6 }} /> Refresh
           </button>
         </div>
       </div>
       <div style={{ marginBottom: 12, fontSize: 11, color: "#6b6b75" }}>
-        <Zap size={11} style={{ verticalAlign: "middle", color: "#00F0FF" }} /> Scores auto-sync hourly from TheSportsDB. Finished matches lock automatically — you can still manually override any score.
+        <Zap size={11} style={{ verticalAlign: "middle", color: "#00F0FF" }} /> Scores auto-sync hourly from ESPN. Finished matches lock automatically — you can still manually override any score.
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
@@ -225,7 +245,7 @@ export default function AdminPanel() {
                         <span>{getFlag(m.home)} {m.home}</span>
                         <span style={{ color: "#6b6b75" }}>vs</span>
                         <span>{getFlag(m.away)} {m.away}</span>
-                        {(m.home?.startsWith("TBD") || m.away?.startsWith("TBD")) && (
+                        {m.round !== "Group Stage" && (
                           <button onClick={() => startEditTeams(m)} className="btn-ghost" style={{ padding: "4px 8px" }} data-testid={`admin-edit-teams-${m.match_id}`}>
                             <Pencil size={11} />
                           </button>

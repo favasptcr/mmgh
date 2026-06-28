@@ -67,6 +67,7 @@ class AdminResultIn(BaseModel):
     locked: Optional[bool] = None
     home: Optional[str] = None
     away: Optional[str] = None
+    kickoff_utc: Optional[str] = None
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -137,15 +138,20 @@ async def startup():
         await db.matches.update_one(
             {"match_id": m["match_id"]},
             {"$set": {
+                # Structural fields + kickoff_utc always overwritten so corrected
+                # seed times propagate to existing DB records on restart.
+                # sync_schedule_once runs 5s later and sets the ESPN-exact value.
                 "round": m["round"],
                 "group": m["group"],
+                "kickoff_utc": m["kickoff_utc"],
+            }, "$setOnInsert": {
+                # Schedule/team fields only written on first insert so that
+                # sync_schedule_once and admin edits survive server restarts
                 "date": m["date"],
                 "time": m["time"],
-                "kickoff_utc": m["kickoff_utc"],
+                "venue": m["venue"],
                 "home": m["home"],
                 "away": m["away"],
-                "venue": m["venue"],
-            }, "$setOnInsert": {
                 "home_score": None,
                 "away_score": None,
                 "locked": False,
@@ -326,6 +332,8 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
         update["home"] = body.home.strip()
     if body.away is not None:
         update["away"] = body.away.strip()
+    if body.kickoff_utc is not None:
+        update["kickoff_utc"] = body.kickoff_utc.strip()
     if not update:
         raise HTTPException(400, "No fields provided")
     await db.matches.update_one({"match_id": body.match_id}, {"$set": update})
@@ -348,6 +356,33 @@ async def admin_sync_schedule(_: bool = Depends(require_admin)):
     Safe — never touches scores or locked state."""
     res = await sync_schedule_once(db)
     return res
+
+
+@api.post("/admin/fix-tbd-kickoffs")
+async def admin_fix_tbd_kickoffs(_: bool = Depends(require_admin)):
+    """Re-apply seed kickoff_utc to all TBD knockout matches in the DB.
+    Use this when seed data has been corrected but the server hasn't restarted yet."""
+    seed = get_seed_matches()
+    patched = []
+    for m in seed:
+        if not str(m.get("home", "")).startswith("TBD"):
+            continue
+        result = await db.matches.update_one(
+            {"match_id": m["match_id"]},
+            {"$set": {"kickoff_utc": m["kickoff_utc"]}},
+        )
+        if result.modified_count:
+            patched.append(m["match_id"])
+    sched = await sync_schedule_once(db)
+    return {"patched_match_ids": patched, "schedule_sync": sched}
+
+
+@api.get("/admin/espn-check")
+async def admin_espn_check(date: str, _: bool = Depends(require_admin)):
+    """Return raw ESPN events for a date (YYYY-MM-DD) — debug only."""
+    from score_sync import fetch_espn_day
+    events = await fetch_espn_day(date)
+    return {"date": date, "count": len(events), "events": events}
 
 
 @api.get("/admin/leaderboard")

@@ -119,6 +119,38 @@ async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, A
     return None
 
 
+async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[str, Any]]:
+    """Find the closest TBD knockout match to an ESPN kickoff time.
+
+    Returns the TBD match whose kickoff_utc is nearest to the ESPN time,
+    within a 3-hour window. Using closest-match (not fixed window) handles
+    seed data that is off by up to ~1 hour from ESPN's actual times.
+    TBD matches are always ≥1 hour apart so the closest is unambiguous.
+    """
+    if not start_utc_str:
+        return None
+    try:
+        dt_espn = datetime.fromisoformat(start_utc_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    max_window = timedelta(hours=3)
+    best_match = None
+    best_diff = max_window
+    async for m in db.matches.find({"home": {"$regex": "^TBD"}}):
+        ko_str = m.get("kickoff_utc")
+        if not ko_str:
+            continue
+        try:
+            dt_local = datetime.fromisoformat(ko_str)
+            diff = abs(dt_local - dt_espn)
+            if diff < best_diff:
+                best_diff = diff
+                best_match = m
+        except Exception:
+            continue
+    return best_match
+
+
 async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
     """Pull scores from ESPN for all recently finished matches.
 
@@ -155,8 +187,18 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 continue
             match = await _find_match_by_teams(db, home, away)
             if not match:
-                log.warning("Sync: no local match for %s vs %s", home, away)
-                continue
+                match = await _find_tbd_match_by_kickoff(db, ev.get("start_utc", ""))
+                if not match:
+                    log.warning("Sync: no local match for %s vs %s", home, away)
+                    continue
+                # Completed matches always have real names, but guard anyway
+                if (not _normalize(home).startswith("tbd") and
+                        not _normalize(away).startswith("tbd")):
+                    await db.matches.update_one(
+                        {"match_id": match["match_id"]},
+                        {"$set": {"home": home, "away": away}},
+                    )
+                    log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
             matched_to_local += 1
             if (match.get("home_score") == hs and
                     match.get("away_score") == a_s and
@@ -200,6 +242,8 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
     for date_str in _days_range(TOURNAMENT_START, TOURNAMENT_END):
         events = await fetch_espn_day(date_str)
+        day_unmatched: List[Dict[str, Any]] = []
+
         for ev in events:
             checked += 1
             home_raw = ev["home_team"]
@@ -228,8 +272,27 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
             match = await _find_match_by_teams(db, home_raw, away_raw)
             if not match:
-                unmatched.append(f"{home_raw} vs {away_raw}")
-                continue
+                match = await _find_tbd_match_by_kickoff(db, start_utc_str)
+                if not match:
+                    # Save for positional fallback below
+                    day_unmatched.append({
+                        "home": home_raw, "away": away_raw,
+                        "kickoff_utc": kickoff_utc, "date": local_date,
+                        "time": local_time, "venue": venue,
+                        "start_utc": start_utc_str,
+                    })
+                    continue
+                # Only write real team names — don't overwrite "TBD R32-X" with ESPN's own "TBD"
+                espn_has_real_teams = (
+                    not _normalize(home_raw).startswith("tbd") and
+                    not _normalize(away_raw).startswith("tbd")
+                )
+                if espn_has_real_teams:
+                    await db.matches.update_one(
+                        {"match_id": match["match_id"]},
+                        {"$set": {"home": home_raw, "away": away_raw}},
+                    )
+                    log.info("Schedule sync: auto-set teams #%s: %s vs %s", match["match_id"], home_raw, away_raw)
 
             update: Dict[str, Any] = {"kickoff_utc": kickoff_utc, "date": local_date, "time": local_time}
             if venue:
@@ -246,6 +309,52 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
             log.info("Schedule sync: #%s %s vs %s → %s %s %s",
                      match["match_id"], home_raw, away_raw, local_date, local_time, venue)
 
+        # Positional fallback: when kickoff-time matching misses events (seed time off by ≥3h),
+        # pair remaining ESPN events to TBD slots by sorted-time order within the same ET date.
+        # Safe because matches within a day are always ordered identically in ESPN and our seed.
+        if day_unmatched:
+            et_dates = set(e["date"] for e in day_unmatched)
+            if len(et_dates) == 1:
+                fallback_date = next(iter(et_dates))
+                tbd_slots: List[Dict[str, Any]] = []
+                async for m in db.matches.find(
+                    {"home": {"$regex": "^TBD"}, "date": fallback_date}
+                ):
+                    tbd_slots.append(m)
+
+                if tbd_slots and len(tbd_slots) == len(day_unmatched):
+                    tbd_slots.sort(key=lambda m: m.get("kickoff_utc", ""))
+                    day_unmatched.sort(key=lambda e: e["start_utc"])
+                    for ev_data, slot in zip(day_unmatched, tbd_slots):
+                        espn_real = (
+                            not _normalize(ev_data["home"]).startswith("tbd") and
+                            not _normalize(ev_data["away"]).startswith("tbd")
+                        )
+                        patch: Dict[str, Any] = {
+                            "kickoff_utc": ev_data["kickoff_utc"],
+                            "date": ev_data["date"],
+                            "time": ev_data["time"],
+                        }
+                        if ev_data["venue"]:
+                            patch["venue"] = ev_data["venue"]
+                        if espn_real:
+                            patch["home"] = ev_data["home"]
+                            patch["away"] = ev_data["away"]
+                        await db.matches.update_one(
+                            {"match_id": slot["match_id"]},
+                            {"$set": {**patch, "schedule_synced_at": datetime.now(timezone.utc).isoformat()}},
+                        )
+                        updated += 1
+                        log.info("Schedule sync (positional): #%s %s vs %s → %s %s",
+                                 slot["match_id"], ev_data["home"], ev_data["away"],
+                                 ev_data["date"], ev_data["time"])
+                else:
+                    for ev_data in day_unmatched:
+                        unmatched.append(f"{ev_data['home']} vs {ev_data['away']}")
+            else:
+                for ev_data in day_unmatched:
+                    unmatched.append(f"{ev_data['home']} vs {ev_data['away']}")
+
     return {
         "updated": updated,
         "checked": checked,
@@ -255,9 +364,18 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
 
 async def sync_loop(db):
-    """Run forever in background — quick 3-day scan every hour."""
+    """Run forever in background — score sync every hour, schedule sync every 6 hours."""
     log.info("Auto-sync loop starting (interval=%ds, source=ESPN)", SYNC_INTERVAL_SECONDS)
     await asyncio.sleep(5)
+
+    # Run schedule sync immediately on startup to populate TBD team names
+    try:
+        res = await sync_schedule_once(db)
+        log.info("Startup schedule sync: %s", res)
+    except Exception as e:
+        log.exception("Startup schedule sync error: %s", e)
+
+    cycle = 0
     while True:
         try:
             res = await sync_results_once(db, full_scan=False)
@@ -267,4 +385,14 @@ async def sync_loop(db):
             raise
         except Exception as e:
             log.exception("Auto-sync loop error: %s", e)
+
+        cycle += 1
+        # Re-run schedule sync every 6 hours to catch bracket updates (TBD → real teams)
+        if cycle % 6 == 0:
+            try:
+                res = await sync_schedule_once(db)
+                log.info("Periodic schedule sync: %s", res)
+            except Exception as e:
+                log.exception("Periodic schedule sync error: %s", e)
+
         await asyncio.sleep(SYNC_INTERVAL_SECONDS)
