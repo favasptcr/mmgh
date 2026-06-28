@@ -242,6 +242,8 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
 
     for date_str in _days_range(TOURNAMENT_START, TOURNAMENT_END):
         events = await fetch_espn_day(date_str)
+        day_unmatched: List[Dict[str, Any]] = []
+
         for ev in events:
             checked += 1
             home_raw = ev["home_team"]
@@ -272,7 +274,13 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
             if not match:
                 match = await _find_tbd_match_by_kickoff(db, start_utc_str)
                 if not match:
-                    unmatched.append(f"{home_raw} vs {away_raw}")
+                    # Save for positional fallback below
+                    day_unmatched.append({
+                        "home": home_raw, "away": away_raw,
+                        "kickoff_utc": kickoff_utc, "date": local_date,
+                        "time": local_time, "venue": venue,
+                        "start_utc": start_utc_str,
+                    })
                     continue
                 # Only write real team names — don't overwrite "TBD R32-X" with ESPN's own "TBD"
                 espn_has_real_teams = (
@@ -300,6 +308,52 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
             updated += 1
             log.info("Schedule sync: #%s %s vs %s → %s %s %s",
                      match["match_id"], home_raw, away_raw, local_date, local_time, venue)
+
+        # Positional fallback: when kickoff-time matching misses events (seed time off by ≥3h),
+        # pair remaining ESPN events to TBD slots by sorted-time order within the same ET date.
+        # Safe because matches within a day are always ordered identically in ESPN and our seed.
+        if day_unmatched:
+            et_dates = set(e["date"] for e in day_unmatched)
+            if len(et_dates) == 1:
+                fallback_date = next(iter(et_dates))
+                tbd_slots: List[Dict[str, Any]] = []
+                async for m in db.matches.find(
+                    {"home": {"$regex": "^TBD"}, "date": fallback_date}
+                ):
+                    tbd_slots.append(m)
+
+                if tbd_slots and len(tbd_slots) == len(day_unmatched):
+                    tbd_slots.sort(key=lambda m: m.get("kickoff_utc", ""))
+                    day_unmatched.sort(key=lambda e: e["start_utc"])
+                    for ev_data, slot in zip(day_unmatched, tbd_slots):
+                        espn_real = (
+                            not _normalize(ev_data["home"]).startswith("tbd") and
+                            not _normalize(ev_data["away"]).startswith("tbd")
+                        )
+                        patch: Dict[str, Any] = {
+                            "kickoff_utc": ev_data["kickoff_utc"],
+                            "date": ev_data["date"],
+                            "time": ev_data["time"],
+                        }
+                        if ev_data["venue"]:
+                            patch["venue"] = ev_data["venue"]
+                        if espn_real:
+                            patch["home"] = ev_data["home"]
+                            patch["away"] = ev_data["away"]
+                        await db.matches.update_one(
+                            {"match_id": slot["match_id"]},
+                            {"$set": {**patch, "schedule_synced_at": datetime.now(timezone.utc).isoformat()}},
+                        )
+                        updated += 1
+                        log.info("Schedule sync (positional): #%s %s vs %s → %s %s",
+                                 slot["match_id"], ev_data["home"], ev_data["away"],
+                                 ev_data["date"], ev_data["time"])
+                else:
+                    for ev_data in day_unmatched:
+                        unmatched.append(f"{ev_data['home']} vs {ev_data['away']}")
+            else:
+                for ev_data in day_unmatched:
+                    unmatched.append(f"{ev_data['home']} vs {ev_data['away']}")
 
     return {
         "updated": updated,
