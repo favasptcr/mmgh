@@ -120,9 +120,12 @@ async def _find_match_by_teams(db, home: str, away: str) -> Optional[Dict[str, A
 
 
 async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[str, Any]]:
-    """Find a TBD knockout match by kickoff time (±90 min window).
+    """Find the closest TBD knockout match to an ESPN kickoff time.
 
-    Used as fallback when team names are still placeholders (e.g. 'TBD R32-1').
+    Returns the TBD match whose kickoff_utc is nearest to the ESPN time,
+    within a 3-hour window. Using closest-match (not fixed window) handles
+    seed data that is off by up to ~1 hour from ESPN's actual times.
+    TBD matches are always ≥1 hour apart so the closest is unambiguous.
     """
     if not start_utc_str:
         return None
@@ -130,18 +133,22 @@ async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[st
         dt_espn = datetime.fromisoformat(start_utc_str.replace("Z", "+00:00"))
     except Exception:
         return None
-    window = timedelta(minutes=30)
+    max_window = timedelta(hours=3)
+    best_match = None
+    best_diff = max_window
     async for m in db.matches.find({"home": {"$regex": "^TBD"}}):
         ko_str = m.get("kickoff_utc")
         if not ko_str:
             continue
         try:
             dt_local = datetime.fromisoformat(ko_str)
-            if abs(dt_local - dt_espn) <= window:
-                return m
+            diff = abs(dt_local - dt_espn)
+            if diff < best_diff:
+                best_diff = diff
+                best_match = m
         except Exception:
             continue
-    return None
+    return best_match
 
 
 async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
