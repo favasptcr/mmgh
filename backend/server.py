@@ -44,7 +44,9 @@ class PredictionIn(BaseModel):
     match_id: int
     home_score: int = Field(ge=0, le=99)
     away_score: int = Field(ge=0, le=99)
-    penalty_winner: Optional[str] = None  # "home" | "away" | null (knockout only)
+    penalty_winner: Optional[str] = None        # "home" | "away" | null
+    penalty_home_score: Optional[int] = None    # goals in shootout
+    penalty_away_score: Optional[int] = None
 
 
 class PredictionsBulkIn(BaseModel):
@@ -69,7 +71,9 @@ class AdminResultIn(BaseModel):
     home: Optional[str] = None
     away: Optional[str] = None
     kickoff_utc: Optional[str] = None
-    penalty_winner: Optional[str] = None  # "home" | "away" | null
+    penalty_winner: Optional[str] = None
+    penalty_home_score: Optional[int] = None
+    penalty_away_score: Optional[int] = None
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -259,6 +263,8 @@ async def get_me(email: str):
             "home_score": pr["home_score"],
             "away_score": pr["away_score"],
             "penalty_winner": pr.get("penalty_winner"),
+            "penalty_home_score": pr.get("penalty_home_score"),
+            "penalty_away_score": pr.get("penalty_away_score"),
             "updated_at": pr.get("updated_at"),
         }
     return {"player": p, "predictions": predictions}
@@ -288,6 +294,8 @@ async def save_predictions(body: PredictionsBulkIn):
             "home_score": pred.home_score,
             "away_score": pred.away_score,
             "penalty_winner": pen,
+            "penalty_home_score": pred.penalty_home_score,
+            "penalty_away_score": pred.penalty_away_score,
             "updated_at": now_utc_iso(),
         }
         await db.predictions.update_one(
@@ -368,6 +376,10 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
         update["kickoff_utc"] = body.kickoff_utc.strip()
     if body.penalty_winner is not None:
         update["penalty_winner"] = body.penalty_winner if body.penalty_winner in ("home", "away") else None
+    if body.penalty_home_score is not None:
+        update["penalty_home_score"] = body.penalty_home_score
+    if body.penalty_away_score is not None:
+        update["penalty_away_score"] = body.penalty_away_score
     if not update:
         raise HTTPException(400, "No fields provided")
     await db.matches.update_one({"match_id": body.match_id}, {"$set": update})

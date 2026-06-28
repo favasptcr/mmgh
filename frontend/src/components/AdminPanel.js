@@ -55,6 +55,8 @@ export default function AdminPanel() {
     }
     // penalty_winner: use draft value if set, else existing match value, else null
     const pen = ("penalty_winner" in d) ? d.penalty_winner : (match.penalty_winner ?? null);
+    const penH = ("penalty_home_score" in d) ? d.penalty_home_score : (match.penalty_home_score ?? null);
+    const penA = ("penalty_away_score" in d) ? d.penalty_away_score : (match.penalty_away_score ?? null);
     setBusy(true);
     try {
       await adminSetResult({
@@ -62,6 +64,8 @@ export default function AdminPanel() {
         home_score: Number(h),
         away_score: Number(a),
         penalty_winner: pen,
+        penalty_home_score: penH !== "" && penH != null ? Number(penH) : null,
+        penalty_away_score: penA !== "" && penA != null ? Number(penA) : null,
       });
       setMsg(`Saved result for match #${match.match_id}`);
       setDrafts(d => { const x = { ...d }; delete x[match.match_id]; return x; });
@@ -221,6 +225,9 @@ export default function AdminPanel() {
               const homeVal = d.home_score ?? (m.home_score ?? "");
               const awayVal = d.away_score ?? (m.away_score ?? "");
               const penVal = ("penalty_winner" in d) ? d.penalty_winner : (m.penalty_winner ?? null);
+              const penHomeVal = ("penalty_home_score" in d) ? d.penalty_home_score : (m.penalty_home_score ?? "");
+              const penAwayVal = ("penalty_away_score" in d) ? d.penalty_away_score : (m.penalty_away_score ?? "");
+              const isDraw = homeVal !== "" && awayVal !== "" && Number(homeVal) === Number(awayVal);
               const edit = editTeams[m.match_id];
               return (
                 <div key={m.match_id} className="glass" style={{
@@ -304,26 +311,50 @@ export default function AdminPanel() {
                     </button>
                   </div>
                 </div>
-                {/* Penalty winner row — knockout matches only */}
-                {m.round !== "Group Stage" && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: "#6b6b75", fontFamily: "Unbounded", letterSpacing: "0.12em" }}>PEN WINNER:</span>
-                    {["home", "away"].map(side => {
-                      const label = side === "home" ? m.home : m.away;
-                      const sel = penVal === side;
-                      return (
-                        <button key={side} onClick={() => setDraft(m.match_id, "penalty_winner", sel ? null : side)}
-                          style={{ padding: "3px 10px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 10, fontWeight: 700, cursor: "pointer",
-                            background: sel ? "rgba(255,0,127,0.18)" : "transparent",
-                            border: `1px solid ${sel ? "rgba(255,0,127,0.7)" : "rgba(255,255,255,0.12)"}`,
-                            color: sel ? "#FF007F" : "#6b6b75" }}>
-                          {label?.startsWith("TBD") ? (side === "home" ? "Home" : "Away") : label}
-                        </button>
-                      );
-                    })}
-                    {penVal && <span style={{ fontSize: 10, color: "#FFD24A", fontFamily: "JetBrains Mono" }}>→ wins on penalties</span>}
-                    {penVal && <button onClick={() => setDraft(m.match_id, "penalty_winner", null)}
-                      style={{ padding: "2px 8px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 9, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,42,42,0.4)", color: "#FF2A2A" }}>Clear</button>}
+                {/* Penalty section — knockout + draw score only */}
+                {m.round !== "Group Stage" && isDraw && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 9, color: "#FF007F", fontFamily: "Unbounded", letterSpacing: "0.12em", marginBottom: 6 }}>PENALTY SHOOTOUT</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, color: "#6b6b75", fontFamily: "Unbounded" }}>WINNER:</span>
+                      {["home", "away"].map(side => {
+                        const label = side === "home" ? m.home : m.away;
+                        const sel = penVal === side;
+                        return (
+                          <button key={side} onClick={() => setDraft(m.match_id, "penalty_winner", sel ? null : side)}
+                            style={{ padding: "3px 10px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                              background: sel ? "rgba(255,0,127,0.18)" : "transparent",
+                              border: `1px solid ${sel ? "rgba(255,0,127,0.7)" : "rgba(255,255,255,0.12)"}`,
+                              color: sel ? "#FF007F" : "#6b6b75" }}>
+                            {label?.startsWith("TBD") ? (side === "home" ? "Home" : "Away") : label}
+                          </button>
+                        );
+                      })}
+                      {penVal && <button onClick={() => { setDraft(m.match_id, "penalty_winner", null); setDraft(m.match_id, "penalty_home_score", ""); setDraft(m.match_id, "penalty_away_score", ""); }}
+                        style={{ padding: "2px 8px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 9, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,42,42,0.4)", color: "#FF2A2A" }}>Clear</button>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                      <span style={{ fontSize: 10, color: "#6b6b75", fontFamily: "Unbounded" }}>SCORE:</span>
+                      <input type="number" min="0" max="20" placeholder="-"
+                        value={penHomeVal}
+                        onChange={(e) => {
+                          setDraft(m.match_id, "penalty_home_score", e.target.value);
+                          const ph = Number(e.target.value), pa = Number(penAwayVal);
+                          if (e.target.value !== "" && penAwayVal !== "" && ph !== pa)
+                            setDraft(m.match_id, "penalty_winner", ph > pa ? "home" : "away");
+                        }}
+                        className="score-input" style={{ width: 44, height: 32, fontSize: 14 }} />
+                      <span style={{ color: "#6b6b75" }}>–</span>
+                      <input type="number" min="0" max="20" placeholder="-"
+                        value={penAwayVal}
+                        onChange={(e) => {
+                          setDraft(m.match_id, "penalty_away_score", e.target.value);
+                          const ph = Number(penHomeVal), pa = Number(e.target.value);
+                          if (penHomeVal !== "" && e.target.value !== "" && ph !== pa)
+                            setDraft(m.match_id, "penalty_winner", ph > pa ? "home" : "away");
+                        }}
+                        className="score-input" style={{ width: 44, height: 32, fontSize: 14 }} />
+                    </div>
                   </div>
                 )}
                 </div>

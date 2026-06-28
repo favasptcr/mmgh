@@ -49,6 +49,8 @@ export default function Predictions({ session }) {
         home_score: Number(v.home_score),
         away_score: Number(v.away_score),
         penalty_winner: v.penalty_winner || null,
+        penalty_home_score: v.penalty_home_score !== "" && v.penalty_home_score != null ? Number(v.penalty_home_score) : null,
+        penalty_away_score: v.penalty_away_score !== "" && v.penalty_away_score != null ? Number(v.penalty_away_score) : null,
       }));
     try {
       const res = await savePredictions(session.email, payload);
