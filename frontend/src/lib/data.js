@@ -1,3 +1,30 @@
+// ISO 3166-1 alpha-2 codes for flagcdn.com image URLs.
+// Both seed names and ESPN display name variants are included so flags
+// work regardless of which name the sync stores in the DB.
+export const ISO_CODES = {
+  // Seed names
+  "Mexico": "mx", "South Africa": "za", "South Korea": "kr", "Czechia": "cz",
+  "Canada": "ca", "Bosnia & Herz.": "ba", "USA": "us", "Paraguay": "py",
+  "Qatar": "qa", "Switzerland": "ch", "Brazil": "br", "Morocco": "ma",
+  "Haiti": "ht", "Scotland": "gb-sct", "Australia": "au", "Turkey": "tr",
+  "Germany": "de", "Curacao": "cw", "Netherlands": "nl", "Japan": "jp",
+  "Ivory Coast": "ci", "Ecuador": "ec", "Ukraine": "ua", "Tunisia": "tn",
+  "Spain": "es", "Cape Verde": "cv", "Belgium": "be", "Egypt": "eg",
+  "Saudi Arabia": "sa", "Uruguay": "uy", "Iran": "ir", "New Zealand": "nz",
+  "France": "fr", "Senegal": "sn", "Iraq": "iq", "Norway": "no",
+  "Argentina": "ar", "Algeria": "dz", "Austria": "at", "Jordan": "jo",
+  "Portugal": "pt", "DRC": "cd", "Uzbekistan": "uz", "Colombia": "co",
+  "England": "gb-eng", "Croatia": "hr", "Ghana": "gh", "Panama": "pa",
+  "Denmark": "dk", "Sweden": "se",
+  // ESPN display name variants
+  "United States": "us", "Bosnia-Herzegovina": "ba",
+  "Congo DR": "cd", "DR Congo": "cd",
+  "Cote d'Ivoire": "ci", "Côte d'Ivoire": "ci",
+  "Türkiye": "tr", "Cabo Verde": "cv", "Korea Republic": "kr",
+  "Curaçao": "cw", "Czech Republic": "cz",
+};
+
+// Keep emoji map for any direct string usage elsewhere
 export const FLAG_EMOJIS = {
   "Mexico": "🇲🇽", "South Africa": "🇿🇦", "South Korea": "🇰🇷", "Czechia": "🇨🇿",
   "Canada": "🇨🇦", "Bosnia & Herz.": "🇧🇦", "USA": "🇺🇸", "Paraguay": "🇵🇾",
@@ -12,7 +39,6 @@ export const FLAG_EMOJIS = {
   "Portugal": "🇵🇹", "DRC": "🇨🇩", "Uzbekistan": "🇺🇿", "Colombia": "🇨🇴",
   "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
   "Denmark": "🇩🇰", "Sweden": "🇸🇪",
-  // ESPN display names differ from seed names — both variants needed so flags work after sync
   "United States": "🇺🇸", "Bosnia-Herzegovina": "🇧🇦",
   "Congo DR": "🇨🇩", "DR Congo": "🇨🇩",
   "Cote d'Ivoire": "🇨🇮", "Côte d'Ivoire": "🇨🇮",
