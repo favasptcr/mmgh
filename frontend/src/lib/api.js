@@ -52,6 +52,9 @@ export const adminSyncNow = () =>
 export const adminSyncSchedule = () =>
   api.post("/admin/sync-schedule", {}, { headers: adminHeaders() }).then(r => r.data);
 
+export const adminFixTbdKickoffs = () =>
+  api.post("/admin/fix-tbd-kickoffs", {}, { headers: adminHeaders() }).then(r => r.data);
+
 export const saveWinnerPrediction = (email, team) =>
   api.post("/winner-prediction", { email, team }).then(r => r.data);
 
