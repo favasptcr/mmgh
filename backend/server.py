@@ -103,24 +103,28 @@ def is_locked(match: Dict[str, Any]) -> bool:
 
 def calc_points(pred_h: Optional[int], pred_a: Optional[int],
                 act_h: Optional[int], act_a: Optional[int],
-                pred_pen: Optional[str] = None,
-                act_pen: Optional[str] = None) -> Optional[int]:
+                pred_pen_h: Optional[int] = None, pred_pen_a: Optional[int] = None,
+                act_pen_h: Optional[int] = None, act_pen_a: Optional[int] = None) -> Optional[int]:
     """Scoring:
       +4 — exact score
       +1 — correct team advances (including via penalties)
        0 — wrong outcome
-      +2 bonus — match went to penalties AND correct penalty winner picked
+      +2 bonus — match went to penalties AND predicted penalty score matches exactly
                (added on top of score points, max total +6)
     """
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
 
-    # +2 bonus if match went to pens and prediction matches
-    pen_bonus = 2 if (act_pen and pred_pen == act_pen) else 0
+    # +2 bonus only if predicted penalty score exactly matches actual penalty score
+    pen_bonus = 2 if (
+        act_pen_h is not None and act_pen_a is not None and
+        pred_pen_h is not None and pred_pen_a is not None and
+        pred_pen_h == act_pen_h and pred_pen_a == act_pen_a
+    ) else 0
 
-    # Who actually advances (knockout: pen winner overrides draw)
-    if act_pen:
-        actual_winner = act_pen          # "home" or "away"
+    # Who actually advances (knockout: penalty scores determine winner)
+    if act_pen_h is not None and act_pen_a is not None:
+        actual_winner = "home" if act_pen_h > act_pen_a else "away"
     elif act_h > act_a:
         actual_winner = "home"
     elif act_a > act_h:
@@ -137,13 +141,15 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
         pred_winner = "home"
     elif pred_a > pred_h:
         pred_winner = "away"
+    elif pred_pen_h is not None and pred_pen_a is not None:
+        pred_winner = "home" if pred_pen_h > pred_pen_a else "away"
     else:
-        pred_winner = pred_pen           # predicted draw → pen pick is the outcome
+        pred_winner = None
 
     if actual_winner and pred_winner == actual_winner:
         return 1 + pen_bonus
 
-    return pen_bonus                     # wrong outcome; pen bonus still applies
+    return pen_bonus
 
 
 def require_admin(authorization: str = Header(None)) -> bool:
@@ -456,7 +462,8 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
             predicted += 1
             pts = calc_points(pr["home_score"], pr["away_score"],
                               match.get("home_score"), match.get("away_score"),
-                              pr.get("penalty_winner"), match.get("penalty_winner"))
+                              pr.get("penalty_home_score"), pr.get("penalty_away_score"),
+                              match.get("penalty_home_score"), match.get("penalty_away_score"))
             if pts is None:
                 continue
             total += pts

@@ -25,7 +25,8 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
     ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
                  match.home_score, match.away_score,
-                 penWinner, match.penalty_winner || null)
+                 prediction.penalty_home_score ?? null, prediction.penalty_away_score ?? null,
+                 match.penalty_home_score ?? null, match.penalty_away_score ?? null)
     : null;
 
   const handleHome = (v) => {
@@ -187,7 +188,6 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
               className={`score-input ${penAwayGoals !== "" ? "has-value" : ""}`}
               style={{ width: 38, height: 30, fontSize: 13 }}
             />
-            <span style={{ fontSize: 9, color: "#6b6b75", fontFamily: "Unbounded", marginLeft: 2 }}>(optional)</span>
           </div>
           {match.penalty_winner && hasResult && (
             <div style={{ marginTop: 6, fontSize: 9, color: "#FFD24A", fontFamily: "Unbounded" }}>
