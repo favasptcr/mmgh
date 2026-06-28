@@ -245,7 +245,7 @@ export default function AdminPanel() {
                         <span>{getFlag(m.home)} {m.home}</span>
                         <span style={{ color: "#6b6b75" }}>vs</span>
                         <span>{getFlag(m.away)} {m.away}</span>
-                        {(m.home?.startsWith("TBD") || m.away?.startsWith("TBD")) && (
+                        {m.round !== "Group Stage" && (
                           <button onClick={() => startEditTeams(m)} className="btn-ghost" style={{ padding: "4px 8px" }} data-testid={`admin-edit-teams-${m.match_id}`}>
                             <Pencil size={11} />
                           </button>
