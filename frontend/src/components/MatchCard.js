@@ -10,8 +10,23 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const groupColor = match.group ? GROUP_COLORS[match.group] : "#A1A1AA";
   const { label: cdLabel, live, soon } = useCountdown(match.kickoff_utc);
 
+  const penWinner = prediction?.penalty_winner ?? null;
+  const penHomeGoals = prediction?.penalty_home_score ?? "";
+  const penAwayGoals = prediction?.penalty_away_score ?? "";
+
+  const homeVal = prediction?.home_score ?? "";
+  const awayVal = prediction?.away_score ?? "";
+
+  // Penalty section only shows for knockout matches when predicted score is a draw
+  const isPredictedDraw = !match.group &&
+    homeVal !== "" && awayVal !== "" &&
+    Number(homeVal) === Number(awayVal);
+
   const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
-    ? calcPoints(Number(prediction.home_score), Number(prediction.away_score), match.home_score, match.away_score)
+    ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
+                 match.home_score, match.away_score,
+                 prediction.penalty_home_score ?? null, prediction.penalty_away_score ?? null,
+                 match.penalty_home_score ?? null, match.penalty_away_score ?? null)
     : null;
 
   const handleHome = (v) => {
@@ -22,9 +37,21 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
     if (locked) return;
     onChange?.(match.match_id, "away_score", v);
   };
-
-  const homeVal = prediction?.home_score ?? "";
-  const awayVal = prediction?.away_score ?? "";
+  const handlePenWinner = (side) => {
+    if (locked) return;
+    onChange?.(match.match_id, "penalty_winner", penWinner === side ? null : side);
+  };
+  const handlePenGoals = (side, v) => {
+    if (locked) return;
+    const field = side === "home" ? "penalty_home_score" : "penalty_away_score";
+    onChange?.(match.match_id, field, v);
+    // Auto-derive winner when both penalty scores are filled
+    const penH = side === "home" ? Number(v) : Number(penHomeGoals);
+    const penA = side === "away" ? Number(v) : Number(penAwayGoals);
+    if (v !== "" && !isNaN(penH) && !isNaN(penA) && penH !== penA) {
+      onChange?.(match.match_id, "penalty_winner", penH > penA ? "home" : "away");
+    }
+  };
 
   const cardCls = `match-card fade-up ${locked ? "locked" : ""} ${hasResult ? "scored" : ""}`;
 
@@ -115,6 +142,62 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
         </div>
       </div>
 
+      {/* Penalty section — only for knockout, only when predicted score is a draw */}
+      {isPredictedDraw && (
+        <div style={{
+          marginTop: 10, padding: "8px 10px", borderRadius: 8,
+          background: "rgba(255,0,127,0.06)", border: "1px solid rgba(255,0,127,0.2)",
+        }}>
+          <div style={{ fontSize: 9, color: "#FF007F", fontFamily: "Unbounded", letterSpacing: "0.15em", marginBottom: 6 }}>
+            PENALTY SHOOTOUT
+          </div>
+          {/* Winner picker */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+            <span style={{ fontSize: 9, color: "#6b6b75", fontFamily: "Unbounded" }}>WINNER:</span>
+            {["home", "away"].map(side => {
+              const label = side === "home" ? match.home : match.away;
+              const selected = penWinner === side;
+              const display = label?.startsWith("TBD") ? (side === "home" ? "Home" : "Away") : label;
+              return (
+                <button key={side} onClick={() => handlePenWinner(side)} disabled={locked}
+                  style={{
+                    padding: "3px 9px", borderRadius: 6, cursor: locked ? "default" : "pointer",
+                    fontFamily: "Unbounded", fontSize: 9, fontWeight: 700,
+                    background: selected ? "rgba(255,0,127,0.22)" : "transparent",
+                    border: `1px solid ${selected ? "rgba(255,0,127,0.8)" : "rgba(255,255,255,0.12)"}`,
+                    color: selected ? "#FF007F" : "#6b6b75", transition: "all 0.15s",
+                  }}>
+                  {display}
+                </button>
+              );
+            })}
+          </div>
+          {/* Penalty score inputs */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 9, color: "#6b6b75", fontFamily: "Unbounded" }}>SCORE:</span>
+            <input type="number" min="0" max="20" placeholder="-" readOnly={locked}
+              value={penHomeGoals}
+              onChange={(e) => handlePenGoals("home", e.target.value)}
+              className={`score-input ${penHomeGoals !== "" ? "has-value" : ""}`}
+              style={{ width: 38, height: 30, fontSize: 13 }}
+            />
+            <span style={{ color: "#6b6b75", fontFamily: "Unbounded", fontWeight: 700, fontSize: 11 }}>–</span>
+            <input type="number" min="0" max="20" placeholder="-" readOnly={locked}
+              value={penAwayGoals}
+              onChange={(e) => handlePenGoals("away", e.target.value)}
+              className={`score-input ${penAwayGoals !== "" ? "has-value" : ""}`}
+              style={{ width: 38, height: 30, fontSize: 13 }}
+            />
+          </div>
+          {match.penalty_winner && hasResult && (
+            <div style={{ marginTop: 6, fontSize: 9, color: "#FFD24A", fontFamily: "Unbounded" }}>
+              ✓ {match.penalty_winner === "home" ? match.home : match.away} WON ON PENS
+              {match.penalty_home_score != null && ` (${match.penalty_home_score}–${match.penalty_away_score})`}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         marginTop: 14, paddingTop: 12,
@@ -145,13 +228,13 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
                 <span style={{
                   display: "inline-flex", alignItems: "center", gap: 4,
                   padding: "3px 8px", borderRadius: 999,
-                  background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
-                  border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
-                  color: pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A",
+                  background: pts >= 4 ? "rgba(255,210,74,0.15)" : pts >= 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
+                  border: `1px solid ${pts >= 4 ? "#FFD24A" : pts >= 1 ? "#39FF14" : "#FF2A2A"}55`,
+                  color: pts >= 4 ? "#FFD24A" : pts >= 1 ? "#39FF14" : "#FF2A2A",
                   fontFamily: "Unbounded", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
                 }} data-testid={`match-points-${match.match_id}`}>
-                  {pts === 4 ? <><Trophy size={10}/> +4 PERFECT</>
-                   : pts === 1 ? <><CheckCircle2 size={10}/> +1 WINNER</>
+                  {pts >= 4 ? <><Trophy size={10}/> +{pts} PERFECT</>
+                   : pts >= 1 ? <><CheckCircle2 size={10}/> +{pts} WINNER</>
                    : "0 PTS"}
                 </span>
               )}

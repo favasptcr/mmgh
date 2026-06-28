@@ -74,12 +74,34 @@ export const ROUND_LABEL = {
 };
 
 // Local scoring helper (matches backend)
-// +4 exact score (winner + goals); +1 correct outcome only; 0 wrong
-export function calcPoints(predH, predA, actH, actA) {
+// +4 exact score; +1 correct outcome; +2 bonus if penalty score predicted exactly (max +6)
+export function calcPoints(predH, predA, actH, actA,
+                           predPenH = null, predPenA = null,
+                           actPenH = null, actPenA = null) {
   if (actH == null || actA == null || predH == null || predA == null) return null;
-  if (predH === actH && predA === actA) return 4;
-  const aw = actH > actA ? "h" : actA > actH ? "a" : "d";
-  const pw = predH > predA ? "h" : predA > predH ? "a" : "d";
-  if (aw === pw) return 1;
-  return 0;
+
+  // +2 bonus only if predicted penalty score exactly matches actual penalty score
+  const penBonus = (
+    actPenH != null && actPenA != null &&
+    predPenH != null && predPenA != null &&
+    Number(predPenH) === Number(actPenH) && Number(predPenA) === Number(actPenA)
+  ) ? 2 : 0;
+
+  // Who actually advances (penalty scores determine winner in knockout)
+  let actualWinner = null;
+  if (actPenH != null && actPenA != null) {
+    actualWinner = actPenH > actPenA ? "home" : "away";
+  } else {
+    actualWinner = actH > actA ? "home" : actA > actH ? "away" : null;
+  }
+
+  if (predH === actH && predA === actA) return 4 + penBonus;
+
+  let predWinner = predH > predA ? "home" : predA > predH ? "away" : null;
+  if (!predWinner && predPenH != null && predPenA != null) {
+    predWinner = Number(predPenH) > Number(predPenA) ? "home" : "away";
+  }
+  if (actualWinner && predWinner === actualWinner) return 1 + penBonus;
+
+  return penBonus;
 }

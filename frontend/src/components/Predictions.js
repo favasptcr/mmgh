@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Save, Filter, CheckCircle2 } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
 import { fetchMatches, fetchMe, savePredictions } from "@/lib/api";
-import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS } from "@/lib/data";
+import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, calcPoints } from "@/lib/data";
 
 export default function Predictions({ session }) {
   const [matches, setMatches] = useState([]);
@@ -48,6 +48,9 @@ export default function Predictions({ session }) {
         match_id: Number(mid),
         home_score: Number(v.home_score),
         away_score: Number(v.away_score),
+        penalty_winner: v.penalty_winner || null,
+        penalty_home_score: v.penalty_home_score !== "" && v.penalty_home_score != null ? Number(v.penalty_home_score) : null,
+        penalty_away_score: v.penalty_away_score !== "" && v.penalty_away_score != null ? Number(v.penalty_away_score) : null,
       }));
     try {
       const res = await savePredictions(session.email, payload);
@@ -90,13 +93,13 @@ export default function Predictions({ session }) {
       if (!p) continue;
       const ph = Number(p.home_score), pa = Number(p.away_score);
       if (Number.isNaN(ph) || Number.isNaN(pa)) continue;
-      if (ph === m.home_score && pa === m.away_score) {
-        total += 4; perfect++;
-      } else {
-        const aw = m.home_score > m.away_score ? "h" : m.away_score > m.home_score ? "a" : "d";
-        const pw = ph > pa ? "h" : pa > ph ? "a" : "d";
-        if (aw === pw) { total += 1; winner++; }
-      }
+      const pts = calcPoints(ph, pa, m.home_score, m.away_score,
+                             p.penalty_home_score ?? null, p.penalty_away_score ?? null,
+                             m.penalty_home_score ?? null, m.penalty_away_score ?? null);
+      if (pts == null) continue;
+      total += pts;
+      if (pts >= 4) perfect++;
+      else if (pts >= 1) winner++;
     }
     return { total, perfect, winner };
   }, [matches, preds]);

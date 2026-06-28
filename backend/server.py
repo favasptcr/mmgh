@@ -44,6 +44,9 @@ class PredictionIn(BaseModel):
     match_id: int
     home_score: int = Field(ge=0, le=99)
     away_score: int = Field(ge=0, le=99)
+    penalty_winner: Optional[str] = None        # "home" | "away" | null
+    penalty_home_score: Optional[int] = None    # goals in shootout
+    penalty_away_score: Optional[int] = None
 
 
 class PredictionsBulkIn(BaseModel):
@@ -68,6 +71,9 @@ class AdminResultIn(BaseModel):
     home: Optional[str] = None
     away: Optional[str] = None
     kickoff_utc: Optional[str] = None
+    penalty_winner: Optional[str] = None
+    penalty_home_score: Optional[int] = None
+    penalty_away_score: Optional[int] = None
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -96,21 +102,54 @@ def is_locked(match: Dict[str, Any]) -> bool:
 
 
 def calc_points(pred_h: Optional[int], pred_a: Optional[int],
-                act_h: Optional[int], act_a: Optional[int]) -> Optional[int]:
+                act_h: Optional[int], act_a: Optional[int],
+                pred_pen_h: Optional[int] = None, pred_pen_a: Optional[int] = None,
+                act_pen_h: Optional[int] = None, act_pen_a: Optional[int] = None) -> Optional[int]:
     """Scoring:
-      +4 — winner + exact score (exact score prediction)
-      +1 — correct outcome (winner or draw) but wrong score
+      +4 — exact score
+      +1 — correct team advances (including via penalties)
        0 — wrong outcome
+      +2 bonus — match went to penalties AND predicted penalty score matches exactly
+               (added on top of score points, max total +6)
     """
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
+
+    # +2 bonus only if predicted penalty score exactly matches actual penalty score
+    pen_bonus = 2 if (
+        act_pen_h is not None and act_pen_a is not None and
+        pred_pen_h is not None and pred_pen_a is not None and
+        pred_pen_h == act_pen_h and pred_pen_a == act_pen_a
+    ) else 0
+
+    # Who actually advances (knockout: penalty scores determine winner)
+    if act_pen_h is not None and act_pen_a is not None:
+        actual_winner = "home" if act_pen_h > act_pen_a else "away"
+    elif act_h > act_a:
+        actual_winner = "home"
+    elif act_a > act_h:
+        actual_winner = "away"
+    else:
+        actual_winner = None             # group-stage draw (no advancement)
+
+    # Exact score?
     if pred_h == act_h and pred_a == act_a:
-        return 4
-    a_winner = "h" if act_h > act_a else ("a" if act_a > act_h else "d")
-    p_winner = "h" if pred_h > pred_a else ("a" if pred_a > pred_h else "d")
-    if a_winner == p_winner:
-        return 1
-    return 0
+        return 4 + pen_bonus
+
+    # Correct outcome?
+    if pred_h > pred_a:
+        pred_winner = "home"
+    elif pred_a > pred_h:
+        pred_winner = "away"
+    elif pred_pen_h is not None and pred_pen_a is not None:
+        pred_winner = "home" if pred_pen_h > pred_pen_a else "away"
+    else:
+        pred_winner = None
+
+    if actual_winner and pred_winner == actual_winner:
+        return 1 + pen_bonus
+
+    return pen_bonus
 
 
 def require_admin(authorization: str = Header(None)) -> bool:
@@ -229,6 +268,9 @@ async def get_me(email: str):
         predictions[str(pr["match_id"])] = {
             "home_score": pr["home_score"],
             "away_score": pr["away_score"],
+            "penalty_winner": pr.get("penalty_winner"),
+            "penalty_home_score": pr.get("penalty_home_score"),
+            "penalty_away_score": pr.get("penalty_away_score"),
             "updated_at": pr.get("updated_at"),
         }
     return {"player": p, "predictions": predictions}
@@ -251,11 +293,15 @@ async def save_predictions(body: PredictionsBulkIn):
         if is_locked(match):
             rejected.append({"match_id": pred.match_id, "reason": "match locked"})
             continue
+        pen = pred.penalty_winner if pred.penalty_winner in ("home", "away") else None
         doc = {
             "email": email,
             "match_id": pred.match_id,
             "home_score": pred.home_score,
             "away_score": pred.away_score,
+            "penalty_winner": pen,
+            "penalty_home_score": pred.penalty_home_score,
+            "penalty_away_score": pred.penalty_away_score,
             "updated_at": now_utc_iso(),
         }
         await db.predictions.update_one(
@@ -334,6 +380,12 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
         update["away"] = body.away.strip()
     if body.kickoff_utc is not None:
         update["kickoff_utc"] = body.kickoff_utc.strip()
+    if body.penalty_winner is not None:
+        update["penalty_winner"] = body.penalty_winner if body.penalty_winner in ("home", "away") else None
+    if body.penalty_home_score is not None:
+        update["penalty_home_score"] = body.penalty_home_score
+    if body.penalty_away_score is not None:
+        update["penalty_away_score"] = body.penalty_away_score
     if not update:
         raise HTTPException(400, "No fields provided")
     await db.matches.update_one({"match_id": body.match_id}, {"$set": update})
@@ -409,7 +461,9 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
                 continue
             predicted += 1
             pts = calc_points(pr["home_score"], pr["away_score"],
-                              match.get("home_score"), match.get("away_score"))
+                              match.get("home_score"), match.get("away_score"),
+                              pr.get("penalty_home_score"), pr.get("penalty_away_score"),
+                              match.get("penalty_home_score"), match.get("penalty_away_score"))
             if pts is None:
                 continue
             total += pts
