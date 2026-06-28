@@ -4,7 +4,8 @@ import {
   fetchMatches, adminSetResult, adminGetLeaderboard,
   adminGetPlayers, adminDeletePlayer, adminSyncNow, adminSyncSchedule, adminFixTbdKickoffs, adminGetWinnerPredictions,
 } from "@/lib/api";
-import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, getFlag } from "@/lib/data";
+import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS } from "@/lib/data";
+import FlagImg from "@/components/FlagImg";
 
 export default function AdminPanel() {
   const [tab, setTab] = useState("results"); // results | leaderboard | players | winner
@@ -242,9 +243,9 @@ export default function AdminPanel() {
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: "Unbounded", fontSize: 13, fontWeight: 700, color: "#fff" }}>
-                        <span>{getFlag(m.home)} {m.home}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><FlagImg team={m.home} size={18} /> {m.home}</span>
                         <span style={{ color: "#6b6b75" }}>vs</span>
-                        <span>{getFlag(m.away)} {m.away}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><FlagImg team={m.away} size={18} /> {m.away}</span>
                         {m.round !== "Group Stage" && (
                           <button onClick={() => startEditTeams(m)} className="btn-ghost" style={{ padding: "4px 8px" }} data-testid={`admin-edit-teams-${m.match_id}`}>
                             <Pencil size={11} />

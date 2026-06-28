@@ -1,6 +1,7 @@
 import { Lock, MapPin, Clock, CheckCircle2, Trophy } from "lucide-react";
 import { useCountdown } from "@/lib/useCountdown";
-import { getFlag, GROUP_COLORS, ROUND_LABEL, calcPoints } from "@/lib/data";
+import { GROUP_COLORS, ROUND_LABEL, calcPoints } from "@/lib/data";
+import FlagImg from "@/components/FlagImg";
 
 const FRAMEX_LOCAL = "/framex-logo.jpg";
 
@@ -70,7 +71,7 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
         {/* Home */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
-          <div style={{ fontSize: 26 }}>{getFlag(match.home)}</div>
+          <div style={{ lineHeight: 1 }}><FlagImg team={match.home} size={28} /></div>
           <div style={{
             fontFamily: "Unbounded", fontWeight: 700, fontSize: 13, marginTop: 4,
             color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
@@ -104,7 +105,7 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
 
         {/* Away */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 0 }}>
-          <div style={{ fontSize: 26 }}>{getFlag(match.away)}</div>
+          <div style={{ lineHeight: 1 }}><FlagImg team={match.away} size={28} /></div>
           <div style={{
             fontFamily: "Unbounded", fontWeight: 700, fontSize: 13, marginTop: 4,
             color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
