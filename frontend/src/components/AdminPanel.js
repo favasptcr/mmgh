@@ -53,12 +53,15 @@ export default function AdminPanel() {
       alert("Enter both scores.");
       return;
     }
+    // penalty_winner: use draft value if set, else existing match value, else null
+    const pen = ("penalty_winner" in d) ? d.penalty_winner : (match.penalty_winner ?? null);
     setBusy(true);
     try {
       await adminSetResult({
         match_id: match.match_id,
         home_score: Number(h),
         away_score: Number(a),
+        penalty_winner: pen,
       });
       setMsg(`Saved result for match #${match.match_id}`);
       setDrafts(d => { const x = { ...d }; delete x[match.match_id]; return x; });
@@ -217,12 +220,13 @@ export default function AdminPanel() {
               const d = drafts[m.match_id] || {};
               const homeVal = d.home_score ?? (m.home_score ?? "");
               const awayVal = d.away_score ?? (m.away_score ?? "");
+              const penVal = ("penalty_winner" in d) ? d.penalty_winner : (m.penalty_winner ?? null);
               const edit = editTeams[m.match_id];
               return (
                 <div key={m.match_id} className="glass" style={{
                   borderRadius: 12, padding: "12px 14px",
-                  display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 12, alignItems: "center",
                 }} data-testid={`admin-match-${m.match_id}`}>
+                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 12, alignItems: "center" }}>
                   <div style={{ fontFamily: "JetBrains Mono", color: "#6b6b75", fontSize: 11 }}>
                     #{m.match_id}
                     {m.group && (
@@ -299,6 +303,29 @@ export default function AdminPanel() {
                       {m.locked ? <Lock size={12} /> : <Unlock size={12} />}
                     </button>
                   </div>
+                </div>
+                {/* Penalty winner row — knockout matches only */}
+                {m.round !== "Group Stage" && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, color: "#6b6b75", fontFamily: "Unbounded", letterSpacing: "0.12em" }}>PEN WINNER:</span>
+                    {["home", "away"].map(side => {
+                      const label = side === "home" ? m.home : m.away;
+                      const sel = penVal === side;
+                      return (
+                        <button key={side} onClick={() => setDraft(m.match_id, "penalty_winner", sel ? null : side)}
+                          style={{ padding: "3px 10px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                            background: sel ? "rgba(255,0,127,0.18)" : "transparent",
+                            border: `1px solid ${sel ? "rgba(255,0,127,0.7)" : "rgba(255,255,255,0.12)"}`,
+                            color: sel ? "#FF007F" : "#6b6b75" }}>
+                          {label?.startsWith("TBD") ? (side === "home" ? "Home" : "Away") : label}
+                        </button>
+                      );
+                    })}
+                    {penVal && <span style={{ fontSize: 10, color: "#FFD24A", fontFamily: "JetBrains Mono" }}>→ wins on penalties</span>}
+                    {penVal && <button onClick={() => setDraft(m.match_id, "penalty_winner", null)}
+                      style={{ padding: "2px 8px", borderRadius: 6, fontFamily: "Unbounded", fontSize: 9, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,42,42,0.4)", color: "#FF2A2A" }}>Clear</button>}
+                  </div>
+                )}
                 </div>
               );
             })}

@@ -44,6 +44,7 @@ class PredictionIn(BaseModel):
     match_id: int
     home_score: int = Field(ge=0, le=99)
     away_score: int = Field(ge=0, le=99)
+    penalty_winner: Optional[str] = None  # "home" | "away" | null (knockout only)
 
 
 class PredictionsBulkIn(BaseModel):
@@ -68,6 +69,7 @@ class AdminResultIn(BaseModel):
     home: Optional[str] = None
     away: Optional[str] = None
     kickoff_utc: Optional[str] = None
+    penalty_winner: Optional[str] = None  # "home" | "away" | null
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -96,21 +98,48 @@ def is_locked(match: Dict[str, Any]) -> bool:
 
 
 def calc_points(pred_h: Optional[int], pred_a: Optional[int],
-                act_h: Optional[int], act_a: Optional[int]) -> Optional[int]:
+                act_h: Optional[int], act_a: Optional[int],
+                pred_pen: Optional[str] = None,
+                act_pen: Optional[str] = None) -> Optional[int]:
     """Scoring:
-      +4 — winner + exact score (exact score prediction)
-      +1 — correct outcome (winner or draw) but wrong score
+      +4 — exact score
+      +1 — correct team advances (including via penalties)
        0 — wrong outcome
+      +2 bonus — match went to penalties AND correct penalty winner picked
+               (added on top of score points, max total +6)
     """
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
+
+    # +2 bonus if match went to pens and prediction matches
+    pen_bonus = 2 if (act_pen and pred_pen == act_pen) else 0
+
+    # Who actually advances (knockout: pen winner overrides draw)
+    if act_pen:
+        actual_winner = act_pen          # "home" or "away"
+    elif act_h > act_a:
+        actual_winner = "home"
+    elif act_a > act_h:
+        actual_winner = "away"
+    else:
+        actual_winner = None             # group-stage draw (no advancement)
+
+    # Exact score?
     if pred_h == act_h and pred_a == act_a:
-        return 4
-    a_winner = "h" if act_h > act_a else ("a" if act_a > act_h else "d")
-    p_winner = "h" if pred_h > pred_a else ("a" if pred_a > pred_h else "d")
-    if a_winner == p_winner:
-        return 1
-    return 0
+        return 4 + pen_bonus
+
+    # Correct outcome?
+    if pred_h > pred_a:
+        pred_winner = "home"
+    elif pred_a > pred_h:
+        pred_winner = "away"
+    else:
+        pred_winner = pred_pen           # predicted draw → pen pick is the outcome
+
+    if actual_winner and pred_winner == actual_winner:
+        return 1 + pen_bonus
+
+    return pen_bonus                     # wrong outcome; pen bonus still applies
 
 
 def require_admin(authorization: str = Header(None)) -> bool:
@@ -229,6 +258,7 @@ async def get_me(email: str):
         predictions[str(pr["match_id"])] = {
             "home_score": pr["home_score"],
             "away_score": pr["away_score"],
+            "penalty_winner": pr.get("penalty_winner"),
             "updated_at": pr.get("updated_at"),
         }
     return {"player": p, "predictions": predictions}
@@ -251,11 +281,13 @@ async def save_predictions(body: PredictionsBulkIn):
         if is_locked(match):
             rejected.append({"match_id": pred.match_id, "reason": "match locked"})
             continue
+        pen = pred.penalty_winner if pred.penalty_winner in ("home", "away") else None
         doc = {
             "email": email,
             "match_id": pred.match_id,
             "home_score": pred.home_score,
             "away_score": pred.away_score,
+            "penalty_winner": pen,
             "updated_at": now_utc_iso(),
         }
         await db.predictions.update_one(
@@ -334,6 +366,8 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
         update["away"] = body.away.strip()
     if body.kickoff_utc is not None:
         update["kickoff_utc"] = body.kickoff_utc.strip()
+    if body.penalty_winner is not None:
+        update["penalty_winner"] = body.penalty_winner if body.penalty_winner in ("home", "away") else None
     if not update:
         raise HTTPException(400, "No fields provided")
     await db.matches.update_one({"match_id": body.match_id}, {"$set": update})
@@ -409,7 +443,8 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
                 continue
             predicted += 1
             pts = calc_points(pr["home_score"], pr["away_score"],
-                              match.get("home_score"), match.get("away_score"))
+                              match.get("home_score"), match.get("away_score"),
+                              pr.get("penalty_winner"), match.get("penalty_winner"))
             if pts is None:
                 continue
             total += pts

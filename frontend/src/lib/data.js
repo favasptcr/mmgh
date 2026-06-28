@@ -75,11 +75,21 @@ export const ROUND_LABEL = {
 
 // Local scoring helper (matches backend)
 // +4 exact score (winner + goals); +1 correct outcome only; 0 wrong
-export function calcPoints(predH, predA, actH, actA) {
+export function calcPoints(predH, predA, actH, actA, predPen = null, actPen = null) {
   if (actH == null || actA == null || predH == null || predA == null) return null;
-  if (predH === actH && predA === actA) return 4;
-  const aw = actH > actA ? "h" : actA > actH ? "a" : "d";
-  const pw = predH > predA ? "h" : predA > predH ? "a" : "d";
-  if (aw === pw) return 1;
-  return 0;
+
+  // +2 bonus if match went to pens and pen winner prediction is correct
+  const penBonus = (actPen && predPen === actPen) ? 2 : 0;
+
+  // Who actually advances (actPen overrides draw in knockout)
+  const actualWinner = actPen
+    ? actPen
+    : actH > actA ? "home" : actA > actH ? "away" : null;
+
+  if (predH === actH && predA === actA) return 4 + penBonus;
+
+  const predWinner = predH > predA ? "home" : predA > predH ? "away" : (predPen || null);
+  if (actualWinner && predWinner === actualWinner) return 1 + penBonus;
+
+  return penBonus;
 }

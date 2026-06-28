@@ -10,8 +10,13 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const groupColor = match.group ? GROUP_COLORS[match.group] : "#A1A1AA";
   const { label: cdLabel, live, soon } = useCountdown(match.kickoff_utc);
 
+  const isKnockout = !match.group;
+  const penWinner = prediction?.penalty_winner ?? null;
+
   const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
-    ? calcPoints(Number(prediction.home_score), Number(prediction.away_score), match.home_score, match.away_score)
+    ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
+                 match.home_score, match.away_score,
+                 penWinner, match.penalty_winner || null)
     : null;
 
   const handleHome = (v) => {
@@ -21,6 +26,11 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const handleAway = (v) => {
     if (locked) return;
     onChange?.(match.match_id, "away_score", v);
+  };
+  const handlePenWinner = (side) => {
+    if (locked) return;
+    // Toggle: clicking the already-selected side clears it
+    onChange?.(match.match_id, "penalty_winner", penWinner === side ? null : side);
   };
 
   const homeVal = prediction?.home_score ?? "";
@@ -115,6 +125,42 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
         </div>
       </div>
 
+      {/* Penalty winner picker — knockout only */}
+      {isKnockout && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 9, color: "#6b6b75", fontFamily: "Unbounded", letterSpacing: "0.15em" }}>
+            PEN WINNER:
+          </span>
+          {["home", "away"].map(side => {
+            const label = side === "home" ? match.home : match.away;
+            const selected = penWinner === side;
+            const display = label?.startsWith("TBD") ? (side === "home" ? "Home" : "Away") : label;
+            return (
+              <button
+                key={side}
+                onClick={() => handlePenWinner(side)}
+                disabled={locked}
+                style={{
+                  padding: "3px 9px", borderRadius: 6, cursor: locked ? "default" : "pointer",
+                  fontFamily: "Unbounded", fontSize: 9, fontWeight: 700,
+                  background: selected ? "rgba(255,0,127,0.18)" : "transparent",
+                  border: `1px solid ${selected ? "rgba(255,0,127,0.7)" : "rgba(255,255,255,0.12)"}`,
+                  color: selected ? "#FF007F" : "#6b6b75",
+                  transition: "all 0.15s",
+                }}
+              >
+                {display}
+              </button>
+            );
+          })}
+          {match.penalty_winner && hasResult && (
+            <span style={{ fontSize: 9, color: "#FFD24A", fontFamily: "Unbounded", marginLeft: 4 }}>
+              → {match.penalty_winner === "home" ? match.home : match.away} WON PENS
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         marginTop: 14, paddingTop: 12,
@@ -145,13 +191,13 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
                 <span style={{
                   display: "inline-flex", alignItems: "center", gap: 4,
                   padding: "3px 8px", borderRadius: 999,
-                  background: pts === 4 ? "rgba(255,210,74,0.15)" : pts === 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
-                  border: `1px solid ${pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A"}55`,
-                  color: pts === 4 ? "#FFD24A" : pts === 1 ? "#39FF14" : "#FF2A2A",
+                  background: pts >= 4 ? "rgba(255,210,74,0.15)" : pts >= 1 ? "rgba(57,255,20,0.15)" : "rgba(255,42,42,0.12)",
+                  border: `1px solid ${pts >= 4 ? "#FFD24A" : pts >= 1 ? "#39FF14" : "#FF2A2A"}55`,
+                  color: pts >= 4 ? "#FFD24A" : pts >= 1 ? "#39FF14" : "#FF2A2A",
                   fontFamily: "Unbounded", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
                 }} data-testid={`match-points-${match.match_id}`}>
-                  {pts === 4 ? <><Trophy size={10}/> +4 PERFECT</>
-                   : pts === 1 ? <><CheckCircle2 size={10}/> +1 WINNER</>
+                  {pts >= 4 ? <><Trophy size={10}/> +{pts} PERFECT</>
+                   : pts >= 1 ? <><CheckCircle2 size={10}/> +{pts} WINNER</>
                    : "0 PTS"}
                 </span>
               )}
