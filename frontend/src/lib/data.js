@@ -80,17 +80,22 @@ export function calcPoints(predH, predA, actH, actA,
                            actPenH = null, actPenA = null) {
   if (actH == null || actA == null || predH == null || predA == null) return null;
 
+  // Penalties only happen when 90-min score is a draw — ignore stored pen data otherwise
+  const isActualDraw = actH === actA;
+  const aPenH = isActualDraw ? actPenH : null;
+  const aPenA = isActualDraw ? actPenA : null;
+
   // +2 bonus only if predicted penalty score exactly matches actual penalty score
   const penBonus = (
-    actPenH != null && actPenA != null &&
+    aPenH != null && aPenA != null &&
     predPenH != null && predPenA != null &&
-    Number(predPenH) === Number(actPenH) && Number(predPenA) === Number(actPenA)
+    Number(predPenH) === Number(aPenH) && Number(predPenA) === Number(aPenA)
   ) ? 2 : 0;
 
-  // Who actually advances (penalty scores determine winner in knockout)
+  // Who actually advances
   let actualWinner = null;
-  if (actPenH != null && actPenA != null) {
-    actualWinner = actPenH > actPenA ? "home" : "away";
+  if (aPenH != null && aPenA != null) {
+    actualWinner = aPenH > aPenA ? "home" : "away";
   } else {
     actualWinner = actH > actA ? "home" : actA > actH ? "away" : null;
   }

@@ -115,16 +115,20 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
 
+    # Penalties only happen when 90-min score is a draw — ignore stored pen data otherwise
+    a_pen_h = act_pen_h if act_h == act_a else None
+    a_pen_a = act_pen_a if act_h == act_a else None
+
     # +2 bonus only if predicted penalty score exactly matches actual penalty score
     pen_bonus = 2 if (
-        act_pen_h is not None and act_pen_a is not None and
+        a_pen_h is not None and a_pen_a is not None and
         pred_pen_h is not None and pred_pen_a is not None and
-        pred_pen_h == act_pen_h and pred_pen_a == act_pen_a
+        pred_pen_h == a_pen_h and pred_pen_a == a_pen_a
     ) else 0
 
-    # Who actually advances (knockout: penalty scores determine winner)
-    if act_pen_h is not None and act_pen_a is not None:
-        actual_winner = "home" if act_pen_h > act_pen_a else "away"
+    # Who actually advances
+    if a_pen_h is not None and a_pen_a is not None:
+        actual_winner = "home" if a_pen_h > a_pen_a else "away"
     elif act_h > act_a:
         actual_winner = "home"
     elif act_a > act_h:
@@ -376,6 +380,12 @@ async def admin_set_result(body: AdminResultIn, _: bool = Depends(require_admin)
         update["home_score"] = body.home_score
     if body.away_score is not None:
         update["away_score"] = body.away_score
+    # If the result is not a draw, clear any penalty data — penalties can't happen
+    if body.home_score is not None and body.away_score is not None:
+        if body.home_score != body.away_score:
+            update["penalty_winner"] = None
+            update["penalty_home_score"] = None
+            update["penalty_away_score"] = None
     if body.locked is not None:
         update["locked"] = body.locked
     if body.home is not None:

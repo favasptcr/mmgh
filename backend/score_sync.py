@@ -254,11 +254,16 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 "synced_at": datetime.now(timezone.utc).isoformat(),
                 "synced_source": "espn",
             }
-            if pen_h is not None and pen_a is not None:
+            if pen_h is not None and pen_a is not None and hs == a_s:
                 update["penalty_home_score"] = pen_h
                 update["penalty_away_score"] = pen_a
                 update["penalty_winner"] = "home" if pen_h > pen_a else "away"
                 log.info("Sync: match #%s penalty %d-%d", match["match_id"], pen_h, pen_a)
+            elif hs != a_s:
+                # Non-draw result — clear any stale penalty data
+                update["penalty_winner"] = None
+                update["penalty_home_score"] = None
+                update["penalty_away_score"] = None
 
             await db.matches.update_one(
                 {"match_id": match["match_id"]},
