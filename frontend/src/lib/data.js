@@ -101,9 +101,14 @@ export function calcPoints(predH, predA, actH, actA,
   if (!predWinner && predPenH != null && predPenA != null) {
     predWinner = Number(predPenH) > Number(predPenA) ? "home" : "away";
   }
-  // null vs null = both drew (group stage draw correctly predicted)
-  if (actualWinner === null && predWinner === null) return 1 + penBonus;
-  if (actualWinner && predWinner === actualWinner) return 1 + penBonus;
+
+  // Correct outcome check:
+  // - Predicted draw (predWinner=null): correct if 90-min score was also a draw
+  // - Predicted a winner: correct if that team advanced (regular time or penalties)
+  const correctOutcome = predWinner === null
+    ? actH === actA
+    : predWinner === actualWinner;
+  if (correctOutcome) return 1 + penBonus;
 
   return penBonus;
 }

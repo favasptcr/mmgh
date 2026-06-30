@@ -146,10 +146,11 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
     else:
         pred_winner = None
 
-    # None vs None = both drew (group stage draw correctly predicted)
-    if actual_winner is None and pred_winner is None:
-        return 1 + pen_bonus
-    if actual_winner and pred_winner == actual_winner:
+    # Correct outcome:
+    # - Predicted draw (pred_winner=None): correct if 90-min score was also a draw
+    # - Predicted a winner: correct if that team advanced (regular time or penalties)
+    correct_outcome = (act_h == act_a) if pred_winner is None else (pred_winner == actual_winner)
+    if correct_outcome:
         return 1 + pen_bonus
 
     return pen_bonus
