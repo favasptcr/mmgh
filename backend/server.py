@@ -141,12 +141,11 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
         return 4 + pen_bonus
 
     # Correct outcome?
+    # pred_winner from main score only — penalty prediction must not override draw outcome check
     if pred_h > pred_a:
         pred_winner = "home"
     elif pred_a > pred_h:
         pred_winner = "away"
-    elif pred_pen_h is not None and pred_pen_a is not None:
-        pred_winner = "home" if pred_pen_h > pred_pen_a else "away"
     else:
         pred_winner = None
 

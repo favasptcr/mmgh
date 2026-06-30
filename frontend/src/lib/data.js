@@ -102,17 +102,14 @@ export function calcPoints(predH, predA, actH, actA,
 
   if (predH === actH && predA === actA) return 4 + penBonus;
 
-  let predWinner = predH > predA ? "home" : predA > predH ? "away" : null;
-  if (!predWinner && predPenH != null && predPenA != null) {
-    predWinner = Number(predPenH) > Number(predPenA) ? "home" : "away";
-  }
+  // predWinner is derived only from the main score prediction, NOT penalty scores.
+  // Penalty prediction is a separate bonus — it must not override the draw outcome check.
+  const predWinner = predH > predA ? "home" : predA > predH ? "away" : null;
 
-  // Correct outcome check:
+  // Correct outcome:
   // - Predicted draw (predWinner=null): correct if 90-min score was also a draw
   // - Predicted a winner: correct if that team advanced (regular time or penalties)
-  const correctOutcome = predWinner === null
-    ? actH === actA
-    : predWinner === actualWinner;
+  const correctOutcome = predWinner === null ? actH === actA : predWinner === actualWinner;
   if (correctOutcome) return 1 + penBonus;
 
   return penBonus;
