@@ -232,12 +232,17 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                     log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
             matched_to_local += 1
 
-            # Skip if already up to date (including penalty data if match went to pens)
+            # Skip only if ALL ESPN data already matches stored data exactly
+            pen_in_sync = (
+                pen_h is None or  # ESPN has no penalty data — don't overwrite
+                (match.get("penalty_home_score") == pen_h and
+                 match.get("penalty_away_score") == pen_a)
+            )
             already_synced = (
                 match.get("home_score") == hs and
                 match.get("away_score") == a_s and
                 match.get("locked") and
-                (not went_to_pens or match.get("penalty_home_score") is not None)
+                pen_in_sync
             )
             if already_synced:
                 continue
