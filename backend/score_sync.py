@@ -7,6 +7,7 @@ Endpoint: https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreb
 """
 import asyncio
 import logging
+import re
 import unicodedata
 from datetime import datetime, timezone, date, timedelta
 from typing import Optional, Dict, Any, List
@@ -82,6 +83,9 @@ def _fetch_espn_day_sync(date_str: str) -> List[Dict[str, Any]]:
                 continue
             status_type = (comp.get("status") or {}).get("type") or {}
             venue_obj = comp.get("venue") or {}
+            notes_raw = comp.get("notes") or []
+            if isinstance(notes_raw, dict):
+                notes_raw = [notes_raw]
             result.append({
                 "home_team": (home.get("team") or {}).get("displayName", ""),
                 "away_team": (away.get("team") or {}).get("displayName", ""),
@@ -90,6 +94,8 @@ def _fetch_espn_day_sync(date_str: str) -> List[Dict[str, Any]]:
                 "home_score": home.get("score"),
                 "away_score": away.get("score"),
                 "venue": venue_obj.get("fullName") or "",
+                "status_detail": status_type.get("shortDetail") or status_type.get("description") or "",
+                "notes": notes_raw,
             })
         return result
     except Exception as e:
@@ -185,6 +191,31 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 a_s = int(ev["away_score"])
             except (TypeError, ValueError):
                 continue
+
+            # Detect penalty shootout — ESPN shortDetail is "FT-Pens"
+            status_detail = (ev.get("status_detail") or "").lower()
+            went_to_pens = "pens" in status_detail or "penalt" in status_detail
+
+            # Parse penalty score from ESPN notes, e.g. "Paraguay advance 4-3 on penalties"
+            pen_h = pen_a = None
+            if went_to_pens:
+                for note in (ev.get("notes") or []):
+                    text = note.get("text") or note.get("headline") or ""
+                    m = re.search(r'(\d+)[–\-](\d+)\s+on\s+penalt', text, re.IGNORECASE)
+                    if m:
+                        score_winner = int(m.group(1))
+                        score_loser = int(m.group(2))
+                        prefix = text[:m.start()].strip()
+                        winner_name = re.sub(r'\s+advances?\s*$', '', prefix, re.IGNORECASE).strip()
+                        if _normalize(winner_name) == _normalize(home):
+                            pen_h, pen_a = score_winner, score_loser
+                        elif _normalize(winner_name) == _normalize(away):
+                            pen_h, pen_a = score_loser, score_winner
+                        else:
+                            log.warning("Sync pen: couldn't match '%s' to '%s' or '%s'",
+                                        winner_name, home, away)
+                        break
+
             match = await _find_match_by_teams(db, home, away)
             if not match:
                 match = await _find_tbd_match_by_kickoff(db, ev.get("start_utc", ""))
@@ -200,22 +231,37 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                     )
                     log.info("Auto-set teams #%s: %s vs %s", match["match_id"], home, away)
             matched_to_local += 1
-            if (match.get("home_score") == hs and
-                    match.get("away_score") == a_s and
-                    match.get("locked")):
+
+            # Skip if already up to date (including penalty data if match went to pens)
+            already_synced = (
+                match.get("home_score") == hs and
+                match.get("away_score") == a_s and
+                match.get("locked") and
+                (not went_to_pens or match.get("penalty_home_score") is not None)
+            )
+            if already_synced:
                 continue
+
+            update = {
+                "home_score": hs,
+                "away_score": a_s,
+                "locked": True,
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+                "synced_source": "espn",
+            }
+            if pen_h is not None and pen_a is not None:
+                update["penalty_home_score"] = pen_h
+                update["penalty_away_score"] = pen_a
+                update["penalty_winner"] = "home" if pen_h > pen_a else "away"
+                log.info("Sync: match #%s penalty %d-%d", match["match_id"], pen_h, pen_a)
+
             await db.matches.update_one(
                 {"match_id": match["match_id"]},
-                {"$set": {
-                    "home_score": hs,
-                    "away_score": a_s,
-                    "locked": True,
-                    "synced_at": datetime.now(timezone.utc).isoformat(),
-                    "synced_source": "espn",
-                }},
+                {"$set": update},
             )
             synced += 1
-            trace.append(f"#{match['match_id']} {home} {hs}-{a_s} {away}")
+            trace.append(f"#{match['match_id']} {home} {hs}-{a_s} {away}" +
+                         (f" (pens {pen_h}-{pen_a})" if pen_h is not None else ""))
             log.info("Sync: match #%s %s %d-%d %s", match["match_id"], home, hs, a_s, away)
 
     return {
