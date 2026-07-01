@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import "@/index.css";
-import { LogOut, Lock, BarChart3, Target, ShieldCheck, X, Star } from "lucide-react";
+import { LogOut, Lock, BarChart3, Target, ShieldCheck, X, Star, GitBranch } from "lucide-react";
 import Landing from "@/components/Landing";
 import Predictions from "@/components/Predictions";
 import Stats from "@/components/Stats";
 import AdminPanel from "@/components/AdminPanel";
 import WinnerPrediction from "@/components/WinnerPrediction";
+import Bracket from "@/components/Bracket";
 import MMGHLogo, { FrameXLogo, SponsorBanner } from "@/components/MMGHLogo";
 import SponsorPage from "@/components/SponsorPage";
 import {
@@ -85,6 +86,7 @@ function App() {
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <NavBtn active={view === "predict"} onClick={() => navigateTo("predict")} icon={<Target size={13}/>} label="Predict" tid="nav-predict" />
+            <NavBtn active={view === "bracket"} onClick={() => navigateTo("bracket")} icon={<GitBranch size={13}/>} label="Bracket" tid="nav-bracket" />
             <NavBtn active={view === "winner"} onClick={() => navigateTo("winner")} icon={<Star size={13}/>} label="WC Winner" tid="nav-winner" />
             <NavBtn active={view === "stats"} onClick={() => navigateTo("stats")} icon={<BarChart3 size={13}/>} label="Stats" tid="nav-stats" />
             {isAdmin && (
@@ -123,6 +125,7 @@ function App() {
       </header>
 
       {view === "predict" && <Predictions session={session} />}
+      {view === "bracket" && <Bracket />}
       {view === "winner" && <WinnerPrediction session={session} />}
       {view === "stats" && <Stats stats={stats} />}
       {view === "admin" && isAdmin && <AdminPanel />}
