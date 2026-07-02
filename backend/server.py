@@ -517,14 +517,15 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
                 continue
 
             is_new = round_name in KO_SCORING
+            is_knockout = not match.get("group")  # R32+ (no group field)
             pts = calc_points(
                 pr["home_score"], pr["away_score"],
                 match.get("home_score"), match.get("away_score"),
                 round_name,
-                pred_pen_h=pr.get("penalty_home_score") if not is_new else None,
-                pred_pen_a=pr.get("penalty_away_score") if not is_new else None,
-                act_pen_h=match.get("penalty_home_score") if not is_new else None,
-                act_pen_a=match.get("penalty_away_score") if not is_new else None,
+                pred_pen_h=pr.get("penalty_home_score") if is_knockout and not is_new else None,
+                pred_pen_a=pr.get("penalty_away_score") if is_knockout and not is_new else None,
+                act_pen_h=match.get("penalty_home_score") if is_knockout and not is_new else None,
+                act_pen_a=match.get("penalty_away_score") if is_knockout and not is_new else None,
                 pred_pen_winner=pr.get("penalty_winner") if is_new else None,
                 act_pen_winner=match.get("penalty_winner") if is_new else None,
             )

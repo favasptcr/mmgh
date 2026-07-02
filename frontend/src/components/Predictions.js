@@ -97,13 +97,14 @@ export default function Predictions({ session }) {
       }
       const ph = Number(p.home_score), pa = Number(p.away_score);
       if (Number.isNaN(ph) || Number.isNaN(pa)) continue;
+      const isKnockout = !m.group;
       const isNewSystem = !!sc;
       const pts = calcPoints(
         ph, pa, m.home_score, m.away_score, m.round,
-        !isNewSystem ? (p.penalty_home_score ?? null) : null,
-        !isNewSystem ? (p.penalty_away_score ?? null) : null,
-        !isNewSystem ? (m.penalty_home_score ?? null) : null,
-        !isNewSystem ? (m.penalty_away_score ?? null) : null,
+        isKnockout && !isNewSystem ? (p.penalty_home_score ?? null) : null,
+        isKnockout && !isNewSystem ? (p.penalty_away_score ?? null) : null,
+        isKnockout && !isNewSystem ? (m.penalty_home_score ?? null) : null,
+        isKnockout && !isNewSystem ? (m.penalty_away_score ?? null) : null,
         isNewSystem ? (p.penalty_winner ?? null) : null,
         isNewSystem ? (m.penalty_winner ?? null) : null,
       );

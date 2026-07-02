@@ -27,10 +27,10 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
   const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
     ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
                  match.home_score, match.away_score, match.round,
-                 !isNewSystem ? (prediction.penalty_home_score ?? null) : null,
-                 !isNewSystem ? (prediction.penalty_away_score ?? null) : null,
-                 !isNewSystem ? (match.penalty_home_score ?? null) : null,
-                 !isNewSystem ? (match.penalty_away_score ?? null) : null,
+                 isKnockout && !isNewSystem ? (prediction.penalty_home_score ?? null) : null,
+                 isKnockout && !isNewSystem ? (prediction.penalty_away_score ?? null) : null,
+                 isKnockout && !isNewSystem ? (match.penalty_home_score ?? null) : null,
+                 isKnockout && !isNewSystem ? (match.penalty_away_score ?? null) : null,
                  isNewSystem ? (prediction.penalty_winner ?? null) : null,
                  isNewSystem ? (match.penalty_winner ?? null) : null)
     : null;
