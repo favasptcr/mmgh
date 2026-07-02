@@ -47,7 +47,7 @@ export const FLAG_EMOJIS = {
 };
 
 export const isPlaceholderTeam = (team) =>
-  !team || /^TBD/i.test(team) || /round of/i.test(team) || /winner/i.test(team);
+  !team || /^(TBD|Semifinal)/i.test(team) || /round of/i.test(team) || /winner|loser/i.test(team);
 
 export const getFlag = (team) => {
   if (isPlaceholderTeam(team)) return "❓";

@@ -63,9 +63,9 @@ def teams_match(our_name: str, their_name: str) -> bool:
 
 
 def _is_placeholder_name(name: Optional[str]) -> bool:
-    """Return True for placeholder team names (TBD, or ESPN's 'Round of X Winner' style)."""
+    """Return True for placeholder team names (TBD, ESPN's 'Round of X Winner', 'Semifinal X Loser', etc.)."""
     n = _normalize(name or "")
-    return n.startswith("tbd") or "winner" in n or n.startswith("round of")
+    return n.startswith("tbd") or n.startswith("semifinal") or "winner" in n or "loser" in n or n.startswith("round of")
 
 
 def _fetch_espn_day_sync(date_str: str) -> List[Dict[str, Any]]:
@@ -148,7 +148,7 @@ async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[st
     max_window = timedelta(hours=3)
     best_match = None
     best_diff = max_window
-    async for m in db.matches.find({"home": {"$regex": "^(TBD|Round of)"}}):
+    async for m in db.matches.find({"home": {"$regex": "^(TBD|Round of|Semifinal)"}}):
         ko_str = m.get("kickoff_utc")
         if not ko_str:
             continue
