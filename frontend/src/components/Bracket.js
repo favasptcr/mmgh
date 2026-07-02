@@ -180,21 +180,24 @@ export default function Bracket() {
   const sorted = (round) =>
     matches.filter(m => m.round === round).sort((a, b) => a.match_id - b.match_id);
 
-  const r32 = sorted("Round of 32");
   const r16 = sorted("Round of 16");
   const qf  = sorted("Quarterfinal");
   const sf  = sorted("Semifinal");
   const fin = sorted("Final");
   const tp  = sorted("3rd Place");
 
-  // Left half: first 8 / 4 / 2 / 1
-  const r32L = r32.slice(0, 8);
+  // WC2026 bracket structure — R32 matches are NOT adjacent to the R16 they feed.
+  // Order: pairs that feed each R16 slot (R32-1+R32-4 → R16-1, etc.)
+  const byId = (id) => matches.find(m => m.match_id === id) || null;
+
+  // Left half
+  const r32L = [73, 76, 75, 78, 74, 77, 79, 80].map(byId);
   const r16L = r16.slice(0, 4);
   const qfL  = qf.slice(0, 2);
   const sfL  = sf.slice(0, 1);
 
-  // Right half: second 8 / 4 / 2 / 1
-  const r32R = r32.slice(8, 16);
+  // Right half
+  const r32R = [83, 84, 81, 82, 86, 88, 85, 87].map(byId);
   const r16R = r16.slice(4, 8);
   const qfR  = qf.slice(2, 4);
   const sfR  = sf.slice(1, 2);

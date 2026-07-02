@@ -1,4 +1,4 @@
-import { ISO_CODES } from "@/lib/data";
+import { ISO_CODES, isPlaceholderTeam } from "@/lib/data";
 
 /**
  * Renders a country flag as an <img> from flagcdn.com with a 3D/glossy
@@ -7,7 +7,7 @@ import { ISO_CODES } from "@/lib/data";
  */
 export default function FlagImg({ team, size = 22 }) {
   if (!team) return <span style={{ fontSize: size }}>⚪</span>;
-  if (team.startsWith("TBD")) return <span style={{ fontSize: size }}>❓</span>;
+  if (isPlaceholderTeam(team)) return <span style={{ fontSize: size }}>❓</span>;
   const iso = ISO_CODES[team];
   if (!iso) return <span style={{ fontSize: size }}>🏳️</span>;
   return (
