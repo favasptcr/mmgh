@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { fetchMatches } from "@/lib/api";
 import { getFlag, isPlaceholderTeam } from "@/lib/data";
+import { RefreshCw } from "lucide-react";
 
 const BRACKET_H = 640;
 const CARD_W = 152;
@@ -146,12 +147,27 @@ function RoundHeader({ label, width }) {
 export default function Bracket() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const load = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    try {
+      const m = await fetchMatches();
+      setMatches(m);
+      setLastUpdated(new Date());
+    } catch { /* ignore */ }
+    finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchMatches()
-      .then(m => { setMatches(m); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
+    load();
+    const id = setInterval(() => load(), 3 * 60 * 1000); // refresh every 3 min
+    return () => clearInterval(id);
+  }, [load]);
 
   if (loading) {
     return (
@@ -188,13 +204,37 @@ export default function Bracket() {
 
   return (
     <div style={{ padding: "20px 0 48px" }}>
-      <div style={{ padding: "0 16px", marginBottom: 18 }}>
-        <h2 style={{ fontFamily: "Unbounded", fontSize: 16, color: "#fff" }}>
-          <span style={{ color: "#FF007F" }}>WC 2026</span> Bracket
-        </h2>
-        <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 4 }}>
-          Scroll horizontally · <span style={{ color: WIN_COLOR }}>■</span> = winner
+      <div style={{ padding: "0 16px", marginBottom: 18, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: "Unbounded", fontSize: 16, color: "#fff" }}>
+            <span style={{ color: "#FF007F" }}>WC 2026</span> Bracket
+          </h2>
+          <div style={{ fontSize: 10, color: "#6b6b75", fontFamily: "JetBrains Mono", marginTop: 4 }}>
+            Scroll horizontally · <span style={{ color: WIN_COLOR }}>■</span> = winner
+            {lastUpdated && (
+              <span style={{ marginLeft: 10 }}>
+                · updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
         </div>
+        <button
+          onClick={() => load(true)}
+          disabled={refreshing}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 14px", borderRadius: 999,
+            background: "rgba(0,240,255,0.06)",
+            border: "1px solid rgba(0,240,255,0.2)",
+            color: refreshing ? "#4a4a54" : "#00F0FF",
+            fontFamily: "Unbounded", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: refreshing ? "default" : "pointer",
+            transition: "opacity 0.2s",
+          }}
+        >
+          <RefreshCw size={11} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
+          {refreshing ? "Updating…" : "Refresh"}
+        </button>
       </div>
 
       <div style={{ overflowX: "auto", paddingBottom: 16 }}>
