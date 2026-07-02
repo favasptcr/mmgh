@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchMatches } from "@/lib/api";
-import { getFlag } from "@/lib/data";
+import { getFlag, isPlaceholderTeam } from "@/lib/data";
 
 const BRACKET_H = 640;
 const CARD_W = 152;
@@ -16,7 +16,7 @@ function getWinner(match) {
 }
 
 function TeamRow({ flag, name, score, isWinner, hasResult }) {
-  const display = !name || name.startsWith("TBD") ? "TBD"
+  const display = isPlaceholderTeam(name) ? "TBD"
     : name.length > 11 ? name.slice(0, 10) + "…" : name;
   return (
     <div style={{
@@ -185,9 +185,6 @@ export default function Bracket() {
 
   const CON_W = 18;
   const CENTER_W = 180;
-
-  // Column widths for the header row
-  const colW = CARD_W + CON_W;
 
   return (
     <div style={{ padding: "20px 0 48px" }}>

@@ -425,16 +425,28 @@ async def admin_sync_schedule(_: bool = Depends(require_admin)):
 
 @api.post("/admin/fix-tbd-kickoffs")
 async def admin_fix_tbd_kickoffs(_: bool = Depends(require_admin)):
-    """Re-apply seed kickoff_utc to all TBD knockout matches in the DB.
-    Use this when seed data has been corrected but the server hasn't restarted yet."""
+    """Re-apply seed kickoff_utc to all TBD knockout matches.
+    Also resets any ESPN placeholder names (e.g. 'Round of 32 1 Winner') back to
+    the correct 'TBD R16-X' format so the schedule sync can replace them with real teams."""
+    from score_sync import _is_placeholder_name
     seed = get_seed_matches()
     patched = []
     for m in seed:
         if not str(m.get("home", "")).startswith("TBD"):
             continue
+        existing = await db.matches.find_one({"match_id": m["match_id"]})
+        if not existing:
+            continue
+        patch: dict = {"kickoff_utc": m["kickoff_utc"]}
+        # If stored names are ESPN placeholders (not our TBD format), reset them
+        stored_home = existing.get("home", "")
+        if _is_placeholder_name(stored_home) and not str(stored_home).startswith("TBD"):
+            patch["home"] = m["home"]
+            patch["away"] = m["away"]
+            log.info("fix-tbd-kickoffs: resetting #%s '%s' → '%s'", m["match_id"], stored_home, m["home"])
         result = await db.matches.update_one(
             {"match_id": m["match_id"]},
-            {"$set": {"kickoff_utc": m["kickoff_utc"]}},
+            {"$set": patch},
         )
         if result.modified_count:
             patched.append(m["match_id"])

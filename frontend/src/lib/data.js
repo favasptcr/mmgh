@@ -46,9 +46,11 @@ export const FLAG_EMOJIS = {
   "Curaçao": "🇨🇼", "Czech Republic": "🇨🇿",
 };
 
+export const isPlaceholderTeam = (team) =>
+  !team || /^TBD/i.test(team) || /round of/i.test(team) || /winner/i.test(team);
+
 export const getFlag = (team) => {
-  if (!team) return "⚪";
-  if (team.startsWith("TBD")) return "❓";
+  if (isPlaceholderTeam(team)) return "❓";
   return FLAG_EMOJIS[team] || "🏳️";
 };
 
