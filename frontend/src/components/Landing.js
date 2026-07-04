@@ -102,17 +102,58 @@ export default function Landing({ onEntered, stats }) {
         </div>
 
         {/* Scoring */}
-        <div className="glass" style={{ borderRadius: 16, padding: "16px 20px", maxWidth: 620, width: "100%" }}>
+        <div className="glass" style={{ borderRadius: 16, padding: "18px 20px", maxWidth: 640, width: "100%" }}>
           <div style={{
             fontFamily: "Unbounded", fontSize: 10, color: "#A1A1AA", letterSpacing: "0.25em",
-            marginBottom: 12, textAlign: "center",
-          }}>SCORING SYSTEM</div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12, fontSize: 13,
-          }}>
-            <ScoreLine color="#39FF14" label="Correct winner only" pts="+1" />
-            <ScoreLine color="#FFD24A" label="Winner + exact score" pts="+4" />
+            marginBottom: 14, textAlign: "center",
+          }}>POINTS SYSTEM</div>
+
+          {/* Group Stage / R32 */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <ScoreLine color="#39FF14" label="Correct result (GS/R32)" pts="+1" />
+            <ScoreLine color="#FFD24A" label="Exact score (GS/R32)" pts="+4" />
+          </div>
+
+          {/* Knockout table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "JetBrains Mono" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                  {["ROUND", "RESULT", "SCORE", "SHOOTOUT", "SKIP", "MAX"].map(h => (
+                    <th key={h} style={{ padding: "5px 8px", textAlign: "center", color: "#6b6b75", fontWeight: 600, fontSize: 9, letterSpacing: "0.1em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { r: "R16",   c: "#39FF14", rv: "3/-2",  sv: "5/-2",  ov: "2/-2",  sk: 3,  mx: 10 },
+                  { r: "QF",    c: "#FFD24A", rv: "4/-2",  sv: "6/-2",  ov: "3/-2",  sk: 3,  mx: 13 },
+                  { r: "SF",    c: "#FF7F50", rv: "5/-3",  sv: "8/-3",  ov: "3/-3",  sk: 4,  mx: 16 },
+                  { r: "FINAL", c: "#FF007F", rv: "8/-4",  sv: "12/-4", ov: "5/-4",  sk: 5,  mx: 25 },
+                ].map(({ r, c, rv, sv, ov, sk, mx }) => (
+                  <tr key={r} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                    <td style={{ padding: "7px 8px", textAlign: "center" }}>
+                      <span style={{ fontFamily: "Unbounded", fontSize: 9, fontWeight: 800, color: c }}>{r}</span>
+                    </td>
+                    {[rv, sv, ov].map((v, i) => {
+                      const [pos, neg] = v.split("/");
+                      return (
+                        <td key={i} style={{ padding: "7px 8px", textAlign: "center" }}>
+                          <span style={{ color: "#39FF14" }}>+{pos}</span>
+                          <span style={{ color: "#4a4a54", margin: "0 2px" }}>/</span>
+                          <span style={{ color: "#FF2A2A" }}>{neg}</span>
+                        </td>
+                      );
+                    })}
+                    <td style={{ padding: "7px 8px", textAlign: "center", color: "#FF2A2A" }}>-{sk}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "center", color: "#FFD24A", fontFamily: "Unbounded", fontSize: 10, fontWeight: 800 }}>{mx}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 10, color: "#4a4a54", textAlign: "center", fontFamily: "JetBrains Mono" }}>
+            Score col only if result correct · Shootout col only if match goes to penalties · Skip = no prediction
           </div>
         </div>
 

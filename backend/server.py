@@ -101,62 +101,77 @@ def is_locked(match: Dict[str, Any]) -> bool:
         return False
 
 
+# Scoring tables for R16 onwards (new system).
+# Group Stage + R32 use the old system (+4 exact, +1 correct outcome, +2 pen bonus).
+KO_SCORING: Dict[str, Dict[str, int]] = {
+    "Round of 16":  {"rw": 3, "rl": 2, "sw": 5, "sl": 2, "ow": 2, "ol": 2, "skip": 3},
+    "Quarterfinal": {"rw": 4, "rl": 2, "sw": 6, "sl": 2, "ow": 3, "ol": 2, "skip": 3},
+    "Semifinal":    {"rw": 5, "rl": 3, "sw": 8, "sl": 3, "ow": 3, "ol": 3, "skip": 4},
+    "3rd Place":    {"rw": 5, "rl": 3, "sw": 8, "sl": 3, "ow": 3, "ol": 3, "skip": 4},
+    "Final":        {"rw": 8, "rl": 4, "sw": 12, "sl": 4, "ow": 5, "ol": 4, "skip": 5},
+}
+
+
 def calc_points(pred_h: Optional[int], pred_a: Optional[int],
                 act_h: Optional[int], act_a: Optional[int],
+                round_name: str = "Group Stage",
                 pred_pen_h: Optional[int] = None, pred_pen_a: Optional[int] = None,
-                act_pen_h: Optional[int] = None, act_pen_a: Optional[int] = None) -> Optional[int]:
-    """Scoring:
-      +4 — exact score
-      +1 — correct team advances (including via penalties)
-       0 — wrong outcome
-      +2 bonus — match went to penalties AND predicted penalty score matches exactly
-               (added on top of score points, max total +6)
+                act_pen_h: Optional[int] = None, act_pen_a: Optional[int] = None,
+                pred_pen_winner: Optional[str] = None,
+                act_pen_winner: Optional[str] = None) -> Optional[int]:
+    """
+    Group Stage + R32 (old system):
+      +4 exact score | +1 correct outcome | +2 bonus if exact penalty score matches
+    R16+ (new system, per KO_SCORING):
+      result call always scored (±), score checked only if result correct (±),
+      shootout winner scored independently (±), skip = flat penalty for no prediction.
     """
     if act_h is None or act_a is None or pred_h is None or pred_a is None:
         return None
 
-    # Penalties only happen when 90-min score is a draw — ignore stored pen data otherwise
-    a_pen_h = act_pen_h if act_h == act_a else None
-    a_pen_a = act_pen_a if act_h == act_a else None
+    sc = KO_SCORING.get(round_name)
 
-    # +2 bonus only if predicted penalty score exactly matches actual penalty score
-    pen_bonus = 2 if (
-        a_pen_h is not None and a_pen_a is not None and
-        pred_pen_h is not None and pred_pen_a is not None and
-        pred_pen_h == a_pen_h and pred_pen_a == a_pen_a
-    ) else 0
+    if sc is None:
+        # OLD SYSTEM: Group Stage + Round of 32
+        a_pen_h = act_pen_h if act_h == act_a else None
+        a_pen_a = act_pen_a if act_h == act_a else None
+        pen_bonus = 2 if (
+            a_pen_h is not None and a_pen_a is not None and
+            pred_pen_h is not None and pred_pen_a is not None and
+            pred_pen_h == a_pen_h and pred_pen_a == a_pen_a
+        ) else 0
+        if a_pen_h is not None and a_pen_a is not None:
+            actual_winner = "home" if a_pen_h > a_pen_a else "away"
+        elif act_h > act_a:
+            actual_winner = "home"
+        elif act_a > act_h:
+            actual_winner = "away"
+        else:
+            actual_winner = None
+        if pred_h == act_h and pred_a == act_a:
+            return 4 + pen_bonus
+        pred_winner = "home" if pred_h > pred_a else ("away" if pred_a > pred_h else None)
+        correct_outcome = (act_h == act_a) if pred_winner is None else (pred_winner == actual_winner)
+        if correct_outcome:
+            return 1 + pen_bonus
+        return pen_bonus
 
-    # Who actually advances
-    if a_pen_h is not None and a_pen_a is not None:
-        actual_winner = "home" if a_pen_h > a_pen_a else "away"
-    elif act_h > act_a:
-        actual_winner = "home"
-    elif act_a > act_h:
-        actual_winner = "away"
-    else:
-        actual_winner = None             # group-stage draw (no advancement)
-
-    # Exact score?
-    if pred_h == act_h and pred_a == act_a:
-        return 4 + pen_bonus
-
-    # Correct outcome?
-    # pred_winner from main score only — penalty prediction must not override draw outcome check
-    if pred_h > pred_a:
-        pred_winner = "home"
-    elif pred_a > pred_h:
-        pred_winner = "away"
-    else:
-        pred_winner = None
-
-    # Correct outcome:
-    # - Predicted draw (pred_winner=None): correct if 90-min score was also a draw
-    # - Predicted a winner: correct if that team advanced (regular time or penalties)
-    correct_outcome = (act_h == act_a) if pred_winner is None else (pred_winner == actual_winner)
-    if correct_outcome:
-        return 1 + pen_bonus
-
-    return pen_bonus
+    # NEW SYSTEM: R16, QF, SF, 3rd Place, Final
+    is_draw = act_h == act_a
+    pred_winner = "home" if pred_h > pred_a else ("away" if pred_a > pred_h else None)
+    act_90_winner = "home" if act_h > act_a else ("away" if act_a > act_h else None)
+    # Result call: purely 90-min outcome (draw vs which team won in regular time)
+    correct_result = (pred_winner is None and is_draw) or (
+        pred_winner is not None and pred_winner == act_90_winner
+    )
+    pts = sc["rw"] if correct_result else -sc["rl"]
+    # Exact score only checked if result call was correct
+    if correct_result:
+        pts += sc["sw"] if (pred_h == act_h and pred_a == act_a) else -sc["sl"]
+    # Shootout winner is independent — only applies if match went to penalties
+    if act_pen_winner is not None:
+        pts += sc["ow"] if pred_pen_winner == act_pen_winner else -sc["ol"]
+    return pts
 
 
 def require_admin(authorization: str = Header(None)) -> bool:
@@ -425,16 +440,28 @@ async def admin_sync_schedule(_: bool = Depends(require_admin)):
 
 @api.post("/admin/fix-tbd-kickoffs")
 async def admin_fix_tbd_kickoffs(_: bool = Depends(require_admin)):
-    """Re-apply seed kickoff_utc to all TBD knockout matches in the DB.
-    Use this when seed data has been corrected but the server hasn't restarted yet."""
+    """Re-apply seed kickoff_utc to all TBD knockout matches.
+    Also resets any ESPN placeholder names (e.g. 'Round of 32 1 Winner') back to
+    the correct 'TBD R16-X' format so the schedule sync can replace them with real teams."""
+    from score_sync import _is_placeholder_name
     seed = get_seed_matches()
     patched = []
     for m in seed:
         if not str(m.get("home", "")).startswith("TBD"):
             continue
+        existing = await db.matches.find_one({"match_id": m["match_id"]})
+        if not existing:
+            continue
+        patch: dict = {"kickoff_utc": m["kickoff_utc"]}
+        # If stored names are ESPN placeholders (not our TBD format), reset them
+        stored_home = existing.get("home", "")
+        if _is_placeholder_name(stored_home) and not str(stored_home).startswith("TBD"):
+            patch["home"] = m["home"]
+            patch["away"] = m["away"]
+            log.info("fix-tbd-kickoffs: resetting #%s '%s' → '%s'", m["match_id"], stored_home, m["home"])
         result = await db.matches.update_one(
             {"match_id": m["match_id"]},
-            {"$set": {"kickoff_utc": m["kickoff_utc"]}},
+            {"$set": patch},
         )
         if result.modified_count:
             patched.append(m["match_id"])
@@ -465,21 +492,43 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
     out = []
     for p in players:
         total = 0
-        perfect = 0  # 4-pt or 3-pt exact
-        correct = 0  # 1-pt
+        perfect = 0
+        correct = 0
         predicted = 0
+
+        preds_by_match: Dict[int, Dict] = {}
         async for pr in db.predictions.find({"email": p["email"]}):
-            match = matches_by_id.get(pr["match_id"])
-            if not match:
+            preds_by_match[pr["match_id"]] = pr
+
+        for match_id, match in matches_by_id.items():
+            if match.get("home_score") is None:
+                continue  # not played yet
+            round_name = match.get("round", "Group Stage")
+            pr = preds_by_match.get(match_id)
+
+            if pr is None:
+                sc = KO_SCORING.get(round_name)
+                if sc:
+                    total -= sc["skip"]  # skip penalty for R16+ only
                 continue
+
             predicted += 1
-            is_knockout = not match.get("group")
-            pts = calc_points(pr["home_score"], pr["away_score"],
-                              match.get("home_score"), match.get("away_score"),
-                              pr.get("penalty_home_score") if is_knockout else None,
-                              pr.get("penalty_away_score") if is_knockout else None,
-                              match.get("penalty_home_score") if is_knockout else None,
-                              match.get("penalty_away_score") if is_knockout else None)
+            if pr.get("home_score") is None or pr.get("away_score") is None:
+                continue
+
+            is_new = round_name in KO_SCORING
+            is_knockout = not match.get("group")  # R32+ (no group field)
+            pts = calc_points(
+                pr["home_score"], pr["away_score"],
+                match.get("home_score"), match.get("away_score"),
+                round_name,
+                pred_pen_h=pr.get("penalty_home_score") if is_knockout and not is_new else None,
+                pred_pen_a=pr.get("penalty_away_score") if is_knockout and not is_new else None,
+                act_pen_h=match.get("penalty_home_score") if is_knockout and not is_new else None,
+                act_pen_a=match.get("penalty_away_score") if is_knockout and not is_new else None,
+                pred_pen_winner=pr.get("penalty_winner") if is_new else None,
+                act_pen_winner=match.get("penalty_winner") if is_new else None,
+            )
             if pts is None:
                 continue
             total += pts
@@ -487,6 +536,7 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
                 perfect += 1
             elif pts == 1:
                 correct += 1
+
         out.append({
             "name": p["name"],
             "email": p["email"],

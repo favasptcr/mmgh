@@ -29,7 +29,7 @@ export const FLAG_EMOJIS = {
   "Mexico": "🇲🇽", "South Africa": "🇿🇦", "South Korea": "🇰🇷", "Czechia": "🇨🇿",
   "Canada": "🇨🇦", "Bosnia & Herz.": "🇧🇦", "USA": "🇺🇸", "Paraguay": "🇵🇾",
   "Qatar": "🇶🇦", "Switzerland": "🇨🇭", "Brazil": "🇧🇷", "Morocco": "🇲🇦",
-  "Haiti": "🇭🇹", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "Australia": "🇦🇺", "Turkey": "🇹🇷",
+  "Haiti": "🇭🇹", "Scotland": "🇬🇧", "Australia": "🇦🇺", "Turkey": "🇹🇷",
   "Germany": "🇩🇪", "Curacao": "🇨🇼", "Netherlands": "🇳🇱", "Japan": "🇯🇵",
   "Ivory Coast": "🇨🇮", "Ecuador": "🇪🇨", "Ukraine": "🇺🇦", "Tunisia": "🇹🇳",
   "Spain": "🇪🇸", "Cape Verde": "🇨🇻", "Belgium": "🇧🇪", "Egypt": "🇪🇬",
@@ -37,7 +37,7 @@ export const FLAG_EMOJIS = {
   "France": "🇫🇷", "Senegal": "🇸🇳", "Iraq": "🇮🇶", "Norway": "🇳🇴",
   "Argentina": "🇦🇷", "Algeria": "🇩🇿", "Austria": "🇦🇹", "Jordan": "🇯🇴",
   "Portugal": "🇵🇹", "DRC": "🇨🇩", "Uzbekistan": "🇺🇿", "Colombia": "🇨🇴",
-  "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
+  "England": "🇬🇧", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
   "Denmark": "🇩🇰", "Sweden": "🇸🇪",
   "United States": "🇺🇸", "Bosnia-Herzegovina": "🇧🇦",
   "Congo DR": "🇨🇩", "DR Congo": "🇨🇩",
@@ -46,9 +46,11 @@ export const FLAG_EMOJIS = {
   "Curaçao": "🇨🇼", "Czech Republic": "🇨🇿",
 };
 
+export const isPlaceholderTeam = (team) =>
+  !team || /^(TBD|Semifinal)/i.test(team) || /round of/i.test(team) || /winner|loser/i.test(team);
+
 export const getFlag = (team) => {
-  if (!team) return "⚪";
-  if (team.startsWith("TBD")) return "❓";
+  if (isPlaceholderTeam(team)) return "❓";
   return FLAG_EMOJIS[team] || "🏳️";
 };
 
@@ -73,44 +75,59 @@ export const ROUND_LABEL = {
   "Final": "Final",
 };
 
-// Local scoring helper (matches backend)
-// +4 exact score; +1 correct outcome; +2 bonus if penalty score predicted exactly (max +6)
-export function calcPoints(predH, predA, actH, actA,
+// Scoring tables for R16 onwards (new system).
+// Group Stage + R32 use the old system (+4 exact, +1 correct outcome, +2 pen bonus).
+export const KO_SCORING = {
+  "Round of 16":  { rw: 3, rl: 2, sw: 5, sl: 2, ow: 2, ol: 2, skip: 3 },
+  "Quarterfinal": { rw: 4, rl: 2, sw: 6, sl: 2, ow: 3, ol: 2, skip: 3 },
+  "Semifinal":    { rw: 5, rl: 3, sw: 8, sl: 3, ow: 3, ol: 3, skip: 4 },
+  "3rd Place":    { rw: 5, rl: 3, sw: 8, sl: 3, ow: 3, ol: 3, skip: 4 },
+  "Final":        { rw: 8, rl: 4, sw: 12, sl: 4, ow: 5, ol: 4, skip: 5 },
+};
+
+// Group Stage + R32: +4 exact | +1 correct outcome | +2 pen bonus (max 6)
+// R16+: result/score/shootout scored independently; see KO_SCORING table
+export function calcPoints(predH, predA, actH, actA, round = "Group Stage",
                            predPenH = null, predPenA = null,
-                           actPenH = null, actPenA = null) {
+                           actPenH = null, actPenA = null,
+                           predPenWinner = null, actPenWinner = null) {
   if (actH == null || actA == null || predH == null || predA == null) return null;
 
-  // Penalties only happen when 90-min score is a draw — ignore stored pen data otherwise
-  const isActualDraw = actH === actA;
-  const aPenH = isActualDraw ? actPenH : null;
-  const aPenA = isActualDraw ? actPenA : null;
+  const sc = KO_SCORING[round];
 
-  // +2 bonus only if predicted penalty score exactly matches actual penalty score
-  const penBonus = (
-    aPenH != null && aPenA != null &&
-    predPenH != null && predPenA != null &&
-    Number(predPenH) === Number(aPenH) && Number(predPenA) === Number(aPenA)
-  ) ? 2 : 0;
-
-  // Who actually advances
-  let actualWinner = null;
-  if (aPenH != null && aPenA != null) {
-    actualWinner = aPenH > aPenA ? "home" : "away";
-  } else {
-    actualWinner = actH > actA ? "home" : actA > actH ? "away" : null;
+  if (!sc) {
+    // OLD SYSTEM: Group Stage + Round of 32
+    const isActualDraw = actH === actA;
+    const aPenH = isActualDraw ? actPenH : null;
+    const aPenA = isActualDraw ? actPenA : null;
+    const penBonus = (
+      aPenH != null && aPenA != null &&
+      predPenH != null && predPenA != null &&
+      Number(predPenH) === Number(aPenH) && Number(predPenA) === Number(aPenA)
+    ) ? 2 : 0;
+    let actualWinner = null;
+    if (aPenH != null && aPenA != null) {
+      actualWinner = aPenH > aPenA ? "home" : "away";
+    } else {
+      actualWinner = actH > actA ? "home" : actA > actH ? "away" : null;
+    }
+    if (predH === actH && predA === actA) return 4 + penBonus;
+    const predWinner = predH > predA ? "home" : predA > predH ? "away" : null;
+    const correctOutcome = predWinner === null ? actH === actA : predWinner === actualWinner;
+    if (correctOutcome) return 1 + penBonus;
+    return penBonus;
   }
 
-  if (predH === actH && predA === actA) return 4 + penBonus;
-
-  // predWinner is derived only from the main score prediction, NOT penalty scores.
-  // Penalty prediction is a separate bonus — it must not override the draw outcome check.
+  // NEW SYSTEM: R16, QF, SF, 3rd Place, Final
+  const isDrawResult = actH === actA;
   const predWinner = predH > predA ? "home" : predA > predH ? "away" : null;
-
-  // Correct outcome:
-  // - Predicted draw (predWinner=null): correct if 90-min score was also a draw
-  // - Predicted a winner: correct if that team advanced (regular time or penalties)
-  const correctOutcome = predWinner === null ? actH === actA : predWinner === actualWinner;
-  if (correctOutcome) return 1 + penBonus;
-
-  return penBonus;
+  const act90Winner = actH > actA ? "home" : actA > actH ? "away" : null;
+  // Result call: purely 90-min outcome (not who advanced via penalties)
+  const correctResult = predWinner === null ? isDrawResult : predWinner === act90Winner;
+  let pts = correctResult ? sc.rw : -sc.rl;
+  // Score: only checked if result call was correct
+  if (correctResult) pts += (predH === actH && predA === actA) ? sc.sw : -sc.sl;
+  // Shootout winner: independent, only for matches that went to penalties
+  if (actPenWinner != null) pts += predPenWinner === actPenWinner ? sc.ow : -sc.ol;
+  return pts;
 }

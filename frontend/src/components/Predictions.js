@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Save, Filter, CheckCircle2 } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
 import { fetchMatches, fetchMe, savePredictions } from "@/lib/api";
-import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, calcPoints } from "@/lib/data";
+import { ROUND_ORDER, ROUND_LABEL, GROUP_COLORS, calcPoints, KO_SCORING } from "@/lib/data";
 
 export default function Predictions({ session }) {
   const [matches, setMatches] = useState([]);
@@ -90,15 +90,24 @@ export default function Predictions({ session }) {
     for (const m of matches) {
       if (m.home_score == null) continue;
       const p = preds[m.match_id];
-      if (!p) continue;
+      const sc = KO_SCORING[m.round];
+      if (!p) {
+        if (sc) total -= sc.skip;  // skip penalty for R16+ with no prediction
+        continue;
+      }
       const ph = Number(p.home_score), pa = Number(p.away_score);
       if (Number.isNaN(ph) || Number.isNaN(pa)) continue;
       const isKnockout = !m.group;
-      const pts = calcPoints(ph, pa, m.home_score, m.away_score,
-                             isKnockout ? (p.penalty_home_score ?? null) : null,
-                             isKnockout ? (p.penalty_away_score ?? null) : null,
-                             isKnockout ? (m.penalty_home_score ?? null) : null,
-                             isKnockout ? (m.penalty_away_score ?? null) : null);
+      const isNewSystem = !!sc;
+      const pts = calcPoints(
+        ph, pa, m.home_score, m.away_score, m.round,
+        isKnockout && !isNewSystem ? (p.penalty_home_score ?? null) : null,
+        isKnockout && !isNewSystem ? (p.penalty_away_score ?? null) : null,
+        isKnockout && !isNewSystem ? (m.penalty_home_score ?? null) : null,
+        isKnockout && !isNewSystem ? (m.penalty_away_score ?? null) : null,
+        isNewSystem ? (p.penalty_winner ?? null) : null,
+        isNewSystem ? (m.penalty_winner ?? null) : null,
+      );
       if (pts == null) continue;
       total += pts;
       if (pts >= 4) perfect++;
@@ -125,8 +134,8 @@ export default function Predictions({ session }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 14, fontSize: 11, color: "#A1A1AA", flexWrap: "wrap" }}>
-          <Stat color="#FFD24A" v={myScore.perfect} l="PERFECT (+4)" />
-          <Stat color="#39FF14" v={myScore.winner} l="WINNER (+1)" />
+          <Stat color="#FFD24A" v={myScore.perfect} l="EXACT SCORE" />
+          <Stat color="#39FF14" v={myScore.winner} l="CORRECT RESULT" />
         </div>
       </div>
 

@@ -62,6 +62,12 @@ def teams_match(our_name: str, their_name: str) -> bool:
     return any(_normalize(x) == b for x in aliases)
 
 
+def _is_placeholder_name(name: Optional[str]) -> bool:
+    """Return True for placeholder team names (TBD, ESPN's 'Round of X Winner', 'Semifinal X Loser', etc.)."""
+    n = _normalize(name or "")
+    return n.startswith("tbd") or n.startswith("semifinal") or "winner" in n or "loser" in n or n.startswith("round of")
+
+
 def _fetch_espn_day_sync(date_str: str) -> List[Dict[str, Any]]:
     """Fetch all WC matches for a UTC date (YYYY-MM-DD) from ESPN."""
     try:
@@ -142,7 +148,7 @@ async def _find_tbd_match_by_kickoff(db, start_utc_str: str) -> Optional[Dict[st
     max_window = timedelta(hours=3)
     best_match = None
     best_diff = max_window
-    async for m in db.matches.find({"home": {"$regex": "^TBD"}}):
+    async for m in db.matches.find({"home": {"$regex": "^(TBD|Round of|Semifinal)"}}):
         ko_str = m.get("kickoff_utc")
         if not ko_str:
             continue
@@ -222,9 +228,8 @@ async def sync_results_once(db, full_scan: bool = False) -> Dict[str, Any]:
                 if not match:
                     log.warning("Sync: no local match for %s vs %s", home, away)
                     continue
-                # Completed matches always have real names, but guard anyway
-                if (not _normalize(home).startswith("tbd") and
-                        not _normalize(away).startswith("tbd")):
+                # Only write real team names — not ESPN placeholders like "Round of 32 1 Winner"
+                if not _is_placeholder_name(home) and not _is_placeholder_name(away):
                     await db.matches.update_one(
                         {"match_id": match["match_id"]},
                         {"$set": {"home": home, "away": away}},
@@ -338,12 +343,8 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                         "start_utc": start_utc_str,
                     })
                     continue
-                # Only write real team names — don't overwrite "TBD R32-X" with ESPN's own "TBD"
-                espn_has_real_teams = (
-                    not _normalize(home_raw).startswith("tbd") and
-                    not _normalize(away_raw).startswith("tbd")
-                )
-                if espn_has_real_teams:
+                # Only write real team names — not ESPN placeholders like "Round of 32 1 Winner"
+                if not _is_placeholder_name(home_raw) and not _is_placeholder_name(away_raw):
                     await db.matches.update_one(
                         {"match_id": match["match_id"]},
                         {"$set": {"home": home_raw, "away": away_raw}},
@@ -382,10 +383,6 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                     tbd_slots.sort(key=lambda m: m.get("kickoff_utc", ""))
                     day_unmatched.sort(key=lambda e: e["start_utc"])
                     for ev_data, slot in zip(day_unmatched, tbd_slots):
-                        espn_real = (
-                            not _normalize(ev_data["home"]).startswith("tbd") and
-                            not _normalize(ev_data["away"]).startswith("tbd")
-                        )
                         patch: Dict[str, Any] = {
                             "kickoff_utc": ev_data["kickoff_utc"],
                             "date": ev_data["date"],
@@ -393,7 +390,7 @@ async def sync_schedule_once(db) -> Dict[str, Any]:
                         }
                         if ev_data["venue"]:
                             patch["venue"] = ev_data["venue"]
-                        if espn_real:
+                        if not _is_placeholder_name(ev_data["home"]) and not _is_placeholder_name(ev_data["away"]):
                             patch["home"] = ev_data["home"]
                             patch["away"] = ev_data["away"]
                         await db.matches.update_one(

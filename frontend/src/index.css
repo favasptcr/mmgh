@@ -275,3 +275,5 @@ input[type=number] { -moz-appearance: textfield; }
     mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000, transparent 70%);
     -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000, transparent 70%);
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }
