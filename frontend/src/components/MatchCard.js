@@ -24,15 +24,18 @@ export default function MatchCard({ match, prediction, onChange, readOnly }) {
 
   const isKnockout = !match.group;
   const isNewSystem = isKnockout && KO_SCORING[match.round] != null;
-  const pts = hasResult && prediction?.home_score !== undefined && prediction?.away_score !== undefined
+  const hasPrediction = prediction?.home_score !== undefined && prediction?.away_score !== undefined;
+  const pts = hasResult && hasPrediction
     ? calcPoints(Number(prediction.home_score), Number(prediction.away_score),
                  match.home_score, match.away_score, match.round,
-                 isKnockout && !isNewSystem ? (prediction.penalty_home_score ?? null) : null,
-                 isKnockout && !isNewSystem ? (prediction.penalty_away_score ?? null) : null,
-                 isKnockout && !isNewSystem ? (match.penalty_home_score ?? null) : null,
-                 isKnockout && !isNewSystem ? (match.penalty_away_score ?? null) : null,
+                 isKnockout ? (prediction.penalty_home_score ?? null) : null,
+                 isKnockout ? (prediction.penalty_away_score ?? null) : null,
+                 isKnockout ? (match.penalty_home_score ?? null) : null,
+                 isKnockout ? (match.penalty_away_score ?? null) : null,
                  isNewSystem ? (prediction.penalty_winner ?? null) : null,
                  isNewSystem ? (match.penalty_winner ?? null) : null)
+    : hasResult && !hasPrediction && isNewSystem
+    ? -KO_SCORING[match.round].skip
     : null;
 
   const handleHome = (v) => {

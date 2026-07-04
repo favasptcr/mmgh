@@ -168,9 +168,19 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
     # Exact score only checked if result call was correct
     if correct_result:
         pts += sc["sw"] if (pred_h == act_h and pred_a == act_a) else -sc["sl"]
-    # Shootout winner is independent — only applies if match went to penalties
+    # Shootout: +ow only if exact penalty goals match; -ol if wrong winner; 0 if correct winner but wrong goals
     if act_pen_winner is not None:
-        pts += sc["ow"] if pred_pen_winner == act_pen_winner else -sc["ol"]
+        exact_pen = (
+            pred_pen_h is not None and pred_pen_a is not None and
+            act_pen_h is not None and act_pen_a is not None and
+            pred_pen_h == act_pen_h and pred_pen_a == act_pen_a
+        )
+        if exact_pen:
+            pts += sc["ow"]
+        elif pred_pen_winner == act_pen_winner:
+            pass  # correct winner but wrong/no goals: no change
+        else:
+            pts -= sc["ol"]
     return pts
 
 
@@ -522,10 +532,10 @@ async def admin_leaderboard(_: bool = Depends(require_admin)):
                 pr["home_score"], pr["away_score"],
                 match.get("home_score"), match.get("away_score"),
                 round_name,
-                pred_pen_h=pr.get("penalty_home_score") if is_knockout and not is_new else None,
-                pred_pen_a=pr.get("penalty_away_score") if is_knockout and not is_new else None,
-                act_pen_h=match.get("penalty_home_score") if is_knockout and not is_new else None,
-                act_pen_a=match.get("penalty_away_score") if is_knockout and not is_new else None,
+                pred_pen_h=pr.get("penalty_home_score") if is_knockout else None,
+                pred_pen_a=pr.get("penalty_away_score") if is_knockout else None,
+                act_pen_h=match.get("penalty_home_score") if is_knockout else None,
+                act_pen_a=match.get("penalty_away_score") if is_knockout else None,
                 pred_pen_winner=pr.get("penalty_winner") if is_new else None,
                 act_pen_winner=match.get("penalty_winner") if is_new else None,
             )

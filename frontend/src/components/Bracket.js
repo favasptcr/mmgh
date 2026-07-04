@@ -197,7 +197,7 @@ export default function Bracket() {
   const sfL  = sf.slice(0, 1);
 
   // Right half
-  const r32R = [83, 84, 81, 82, 86, 88, 85, 87].map(byId);
+  const r32R = [83, 84, 81, 82, 87, 86, 85, 88].map(byId);
   const r16R = r16.slice(4, 8);
   const qfR  = qf.slice(2, 4);
   const sfR  = sf.slice(1, 2);
