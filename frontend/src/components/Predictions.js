@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Save, Filter, CheckCircle2 } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
 import { fetchMatches, fetchMe, savePredictions } from "@/lib/api";
@@ -14,6 +14,7 @@ export default function Predictions({ session }) {
   const [group, setGroup] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const isFirstLoad = useRef(true);
 
   const reload = async () => {
     setLoading(true);
@@ -21,6 +22,17 @@ export default function Predictions({ session }) {
       const [m, me] = await Promise.all([fetchMatches(), fetchMe(session.email)]);
       setMatches(m);
       setPreds(me.predictions || {});
+      // On first load, auto-jump to the current active round
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        for (const r of [...ROUND_ORDER].reverse()) {
+          if (m.some(match => match.round === r && match.locked)) {
+            setRound(r);
+            setGroup("All");
+            break;
+          }
+        }
+      }
     } catch (e) {
       setError("Failed to load matches.");
     } finally {
