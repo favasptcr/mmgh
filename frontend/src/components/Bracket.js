@@ -193,13 +193,13 @@ export default function Bracket() {
   // Left half
   const r32L = [73, 76, 75, 78, 74, 77, 79, 80].map(byId);
   const r16L = r16.slice(0, 4);
-  const qfL  = qf.slice(0, 2);
+  const qfL  = [byId(97), byId(99)];   // QF-97 (R16-1+2) and QF-99 (R16-3+4)
   const sfL  = sf.slice(0, 1);
 
   // Right half
   const r32R = [83, 84, 81, 82, 87, 86, 85, 88].map(byId);
   const r16R = r16.slice(4, 8);
-  const qfR  = qf.slice(2, 4);
+  const qfR  = [byId(98), byId(100)];  // QF-98 (R16-5+6) and QF-100 (R16-7+8)
   const sfR  = sf.slice(1, 2);
 
   const CON_W = 18;
