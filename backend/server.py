@@ -168,8 +168,8 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
     # Exact score only checked if result call was correct
     if correct_result:
         pts += sc["sw"] if (pred_h == act_h and pred_a == act_a) else -sc["sl"]
-    # Shootout: +ow only if exact penalty goals match; -ol if wrong winner; 0 if correct winner but wrong goals
-    if act_pen_winner is not None:
+    # Shootout: only scored when player predicted a draw; ignores stale pen data otherwise
+    if act_pen_winner is not None and pred_h == pred_a:
         exact_pen = (
             pred_pen_h is not None and pred_pen_a is not None and
             act_pen_h is not None and act_pen_a is not None and
@@ -179,7 +179,6 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
             pts += sc["ow"]
         elif pred_pen_winner is not None and pred_pen_winner != act_pen_winner:
             pts -= sc["ol"]
-        # no prediction (null): no penalty charge
     return pts
 
 
