@@ -128,13 +128,13 @@ export function calcPoints(predH, predA, actH, actA, round = "Group Stage",
   // Score: only checked if result call was correct
   if (correctResult) pts += (predH === actH && predA === actA) ? sc.sw : -sc.sl;
   // Shootout: +ow only if exact penalty goals match; -ol if wrong winner; 0 if correct winner but wrong goals
-  if (actPenWinner != null) {
+  // Only score shootout if player predicted a draw (predH===predA); ignore stale pen data otherwise
+  if (actPenWinner != null && predH === predA) {
     const exactPen = predPenH != null && predPenA != null &&
                      actPenH != null && actPenA != null &&
                      Number(predPenH) === Number(actPenH) && Number(predPenA) === Number(actPenA);
     if (exactPen) pts += sc.ow;
     else if (predPenWinner != null && predPenWinner !== actPenWinner) pts -= sc.ol;
-    // no penalty prediction (null): no charge
   }
   return pts;
 }
