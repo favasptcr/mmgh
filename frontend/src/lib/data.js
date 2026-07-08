@@ -133,8 +133,8 @@ export function calcPoints(predH, predA, actH, actA, round = "Group Stage",
                      actPenH != null && actPenA != null &&
                      Number(predPenH) === Number(actPenH) && Number(predPenA) === Number(actPenA);
     if (exactPen) pts += sc.ow;
-    else if (predPenWinner !== actPenWinner) pts -= sc.ol;
-    // correct winner but wrong/no goals: no change
+    else if (predPenWinner != null && predPenWinner !== actPenWinner) pts -= sc.ol;
+    // no penalty prediction (null): no charge
   }
   return pts;
 }

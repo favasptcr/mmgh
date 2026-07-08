@@ -177,10 +177,9 @@ def calc_points(pred_h: Optional[int], pred_a: Optional[int],
         )
         if exact_pen:
             pts += sc["ow"]
-        elif pred_pen_winner == act_pen_winner:
-            pass  # correct winner but wrong/no goals: no change
-        else:
+        elif pred_pen_winner is not None and pred_pen_winner != act_pen_winner:
             pts -= sc["ol"]
+        # no prediction (null): no penalty charge
     return pts
 
 
